@@ -15,7 +15,7 @@ services:
       - key: HOST
         value: 0.0.0.0
       - key: BASE_URL
-        sync: false # Prompt for value (e.g., https://zenbin.onrender.com)
+        value: https://zenbin.onrender.com
       - key: LMDB_PATH
         value: /var/data/zenbin.lmdb
       - key: MAX_PAYLOAD_SIZE
