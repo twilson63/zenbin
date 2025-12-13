@@ -55,8 +55,8 @@ describe('POST /v1/pages/:id', () => {
     expect(data.etag).toBeDefined();
   });
 
-  it('should update an existing page', async () => {
-    const pageId = uniqueId('update-page');
+  it('should reject duplicate page IDs', async () => {
+    const pageId = uniqueId('duplicate-page');
     
     // First create the page
     await app.request(`/v1/pages/${pageId}`, {
@@ -67,18 +67,18 @@ describe('POST /v1/pages/:id', () => {
       }),
     });
 
-    // Then update it
+    // Try to create again with same ID
     const res = await app.request(`/v1/pages/${pageId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        html: '<!doctype html><html><body>Updated Content</body></html>',
+        html: '<!doctype html><html><body>Duplicate</body></html>',
       }),
     });
 
-    expect(res.status).toBe(200);
-    const data = await res.json() as { id: string };
-    expect(data.id).toBe(pageId);
+    expect(res.status).toBe(409);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain('already taken');
   });
 
   it('should accept base64 encoded content', async () => {

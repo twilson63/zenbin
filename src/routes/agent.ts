@@ -37,6 +37,8 @@ Content-Type: application/json
 
 ### Response
 
+**Success (201 Created):**
+
 \`\`\`json
 {
   "id": "my-page",
@@ -48,6 +50,16 @@ Content-Type: application/json
 
 - \`url\` — View the rendered page in a browser
 - \`raw_url\` — Fetch the raw HTML content
+
+**Error: ID Already Taken (409 Conflict):**
+
+\`\`\`json
+{
+  "error": "Page ID \\"my-page\\" is already taken"
+}
+\`\`\`
+
+Page IDs are permanent and cannot be overwritten. Choose a unique ID for each page.
 
 ## Encoding Options
 

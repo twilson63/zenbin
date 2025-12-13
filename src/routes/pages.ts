@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { config } from '../config.js';
-import { savePage } from '../storage/db.js';
+import { savePage, getPage } from '../storage/db.js';
 import { generateEtag } from '../utils/etag.js';
 import { validateId, validatePageBody, decodeHtml } from '../utils/validation.js';
 
@@ -36,6 +36,12 @@ pages.post('/:id', async (c) => {
     return c.json({ error: bodyError.message }, 400);
   }
 
+  // Check if ID is already taken
+  const existing = getPage(id);
+  if (existing) {
+    return c.json({ error: `Page ID "${id}" is already taken` }, 409);
+  }
+
   // Decode HTML if base64 encoded
   const decodedHtml = decodeHtml(body.html, body.encoding);
 
@@ -65,7 +71,7 @@ pages.post('/:id', async (c) => {
 
   c.header('ETag', page.etag);
   
-  return c.json(response, created ? 201 : 200);
+  return c.json(response, 201);
 });
 
 export { pages };
