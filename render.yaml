@@ -1,0 +1,30 @@
+services:
+  - type: web
+    runtime: node
+    name: zenbin
+    plan: starter
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: HOST
+        value: 0.0.0.0
+      - key: BASE_URL
+        sync: false # Prompt for value (e.g., https://zenbin.onrender.com)
+      - key: LMDB_PATH
+        value: /var/data/zenbin.lmdb
+      - key: MAX_PAYLOAD_SIZE
+        value: 524288
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 60000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 100
+    disk:
+      name: zenbin-data
+      mountPath: /var/data
+      sizeGB: 1

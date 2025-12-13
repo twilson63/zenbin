@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { pages } from '../routes/pages.js';
 import { render } from '../routes/render.js';
@@ -12,12 +12,20 @@ const app = new Hono();
 app.route('/v1/pages', pages);
 app.route('/p', render);
 
+// Generate unique IDs for each test run
+let testId: number;
+const uniqueId = (base: string) => `${base}-${testId++}`;
+
 beforeAll(() => {
   try {
     rmSync(TEST_DB_PATH, { recursive: true, force: true });
   } catch { /* ignore */ }
   process.env.LMDB_PATH = TEST_DB_PATH;
   initDatabase();
+});
+
+beforeEach(() => {
+  testId = Date.now();
 });
 
 afterAll(async () => {
@@ -29,7 +37,8 @@ afterAll(async () => {
 
 describe('POST /v1/pages/:id', () => {
   it('should create a new page', async () => {
-    const res = await app.request('/v1/pages/test-page', {
+    const pageId = uniqueId('test-page');
+    const res = await app.request(`/v1/pages/${pageId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -40,14 +49,26 @@ describe('POST /v1/pages/:id', () => {
 
     expect(res.status).toBe(201);
     const data = await res.json() as { id: string; url: string; raw_url: string; etag: string };
-    expect(data.id).toBe('test-page');
-    expect(data.url).toContain('/p/test-page');
-    expect(data.raw_url).toContain('/p/test-page/raw');
+    expect(data.id).toBe(pageId);
+    expect(data.url).toContain(`/p/${pageId}`);
+    expect(data.raw_url).toContain(`/p/${pageId}/raw`);
     expect(data.etag).toBeDefined();
   });
 
   it('should update an existing page', async () => {
-    const res = await app.request('/v1/pages/test-page', {
+    const pageId = uniqueId('update-page');
+    
+    // First create the page
+    await app.request(`/v1/pages/${pageId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        html: '<!doctype html><html><body>Original</body></html>',
+      }),
+    });
+
+    // Then update it
+    const res = await app.request(`/v1/pages/${pageId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -57,14 +78,15 @@ describe('POST /v1/pages/:id', () => {
 
     expect(res.status).toBe(200);
     const data = await res.json() as { id: string };
-    expect(data.id).toBe('test-page');
+    expect(data.id).toBe(pageId);
   });
 
   it('should accept base64 encoded content', async () => {
+    const pageId = uniqueId('base64-test');
     const html = '<!doctype html><html><body>Base64 Test</body></html>';
     const base64Html = Buffer.from(html).toString('base64');
 
-    const res = await app.request('/v1/pages/base64-test', {
+    const res = await app.request(`/v1/pages/${pageId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -116,8 +138,10 @@ describe('POST /v1/pages/:id', () => {
 
 describe('GET /p/:id', () => {
   it('should render a page', async () => {
+    const pageId = uniqueId('render-test');
+    
     // First create a page
-    await app.request('/v1/pages/render-test', {
+    await app.request(`/v1/pages/${pageId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -126,7 +150,7 @@ describe('GET /p/:id', () => {
     });
 
     // Then fetch it
-    const res = await app.request('/p/render-test');
+    const res = await app.request(`/p/${pageId}`);
     
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toContain('text/html');
@@ -138,13 +162,15 @@ describe('GET /p/:id', () => {
   });
 
   it('should return 404 for non-existent page', async () => {
-    const res = await app.request('/p/does-not-exist');
+    const res = await app.request(`/p/${uniqueId('does-not-exist')}`);
     expect(res.status).toBe(404);
   });
 
   it('should support ETag caching', async () => {
+    const pageId = uniqueId('etag-test');
+    
     // Create a page
-    const createRes = await app.request('/v1/pages/etag-test', {
+    const createRes = await app.request(`/v1/pages/${pageId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -156,7 +182,7 @@ describe('GET /p/:id', () => {
     expect(etag).toBeDefined();
 
     // Request with matching ETag
-    const cachedRes = await app.request('/p/etag-test', {
+    const cachedRes = await app.request(`/p/${pageId}`, {
       headers: { 'If-None-Match': etag! },
     });
     
@@ -166,8 +192,10 @@ describe('GET /p/:id', () => {
 
 describe('GET /p/:id/raw', () => {
   it('should return raw HTML', async () => {
+    const pageId = uniqueId('raw-test');
+    
     // Create a page
-    await app.request('/v1/pages/raw-test', {
+    await app.request(`/v1/pages/${pageId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -176,11 +204,11 @@ describe('GET /p/:id/raw', () => {
     });
 
     // Fetch raw
-    const res = await app.request('/p/raw-test/raw');
+    const res = await app.request(`/p/${pageId}/raw`);
     
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toContain('text/plain');
-    expect(res.headers.get('Content-Disposition')).toContain('raw-test.html');
+    expect(res.headers.get('Content-Disposition')).toContain(`${pageId}.html`);
     
     const html = await res.text();
     expect(html).toContain('Raw Test');

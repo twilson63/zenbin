@@ -169,6 +169,38 @@ Pages are served with restrictive security headers:
 - `Cross-Origin-Resource-Policy: same-site`
 - `X-Frame-Options: DENY`
 
+## Deploy to Render
+
+ZenBin includes a `render.yaml` Blueprint for easy deployment to [Render.com](https://render.com).
+
+### One-Click Deploy
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/twilson63/zenbin)
+
+### Manual Setup
+
+1. Fork or clone this repository
+2. Create a new **Blueprint** in Render Dashboard
+3. Connect your repository
+4. Set the `BASE_URL` environment variable to your Render URL (e.g., `https://zenbin.onrender.com`)
+5. Deploy
+
+### What's Included
+
+The Blueprint configures:
+- **Web Service** — Node.js runtime on the Starter plan
+- **Persistent Disk** — 1GB mounted at `/var/data` for LMDB storage
+- **Health Check** — Monitors `/health` endpoint
+- **Environment Variables** — Pre-configured for production
+
+### Limitations
+
+Due to Render's persistent disk constraints:
+- **Single instance only** — Services with attached disks cannot scale horizontally
+- **No zero-downtime deploys** — Brief downtime during redeploys (a few seconds)
+
+For multi-instance deployments, consider replacing LMDB with Render Postgres or Redis.
+
 ## Development
 
 ```bash
