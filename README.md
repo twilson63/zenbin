@@ -11,6 +11,7 @@ ZenBin is a lightweight web service that lets you publish HTML documents to uniq
 - **Simple API** — Store HTML by ID with a single POST request
 - **Instant rendering** — View pages at `/p/{id}` in any browser
 - **Raw access** — Fetch original HTML at `/p/{id}/raw`
+- **Proxy endpoint** — Make external API calls from hosted pages (CORS bypass)
 - **Safe by default** — Sandboxed rendering with restrictive security headers
 - **ETag caching** — Efficient caching with `If-None-Match` support
 - **Rate limiting** — Built-in abuse protection
@@ -103,6 +104,57 @@ GET /api/agent
 
 Returns markdown instructions for AI agents on how to use the API.
 
+### Proxy External Requests
+
+```bash
+POST /api/proxy
+Content-Type: application/json
+```
+
+Allows ZenBin-hosted pages to make external HTTP requests through the server, bypassing CORS restrictions.
+
+**Request body:**
+```json
+{
+  "url": "https://api.example.com/data",
+  "method": "GET",
+  "auth": {
+    "type": "bearer",
+    "credentials": "your-token"
+  }
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `url` | Yes | Target URL (http/https only) |
+| `method` | No | HTTP method (default: `GET`) |
+| `body` | No | Request body to forward (JSON) |
+| `timeout` | No | Timeout in ms (max: 30000) |
+| `contentType` | No | Content-Type for outgoing request |
+| `accept` | No | Accept header for outgoing request |
+| `auth` | No | Authentication config (see below) |
+
+**Authentication types:**
+
+| Type | Usage | Result Header |
+|------|-------|---------------|
+| `bearer` | `{ type: "bearer", credentials: "token" }` | `Authorization: Bearer token` |
+| `basic` | `{ type: "basic", credentials: "base64" }` | `Authorization: Basic base64` |
+| `api-key` | `{ type: "api-key", credentials: "key", headerName: "X-API-Key" }` | `X-API-Key: key` |
+
+**Response:**
+```json
+{
+  "status": 200,
+  "statusText": "OK",
+  "headers": { "content-type": "application/json" },
+  "body": { ... }
+}
+```
+
+**Security:** Only requests originating from ZenBin-hosted pages are allowed. SSRF protection blocks private IPs and internal endpoints.
+
 ## Examples
 
 ### Simple page
@@ -149,6 +201,13 @@ Configure via environment variables or `.env` file:
 | `MAX_ID_LENGTH` | `128` | Max page ID length |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window (ms) |
 | `RATE_LIMIT_MAX_REQUESTS` | `100` | Max requests per window |
+| `PROXY_TIMEOUT_MS` | `30000` | Max timeout for proxy requests |
+| `PROXY_MAX_REQUEST_SIZE` | `5242880` | Max proxy request body (5MB) |
+| `PROXY_MAX_RESPONSE_SIZE` | `5242880` | Max proxy response size (5MB) |
+| `PROXY_ALLOWED_DOMAINS` | `` | Comma-separated domain allowlist (empty = all) |
+| `PROXY_RATE_LIMIT_MAX` | `5` | Max proxy requests per window |
+| `PROXY_RATE_LIMIT_WINDOW_MS` | `60000` | Proxy rate limit window (ms) |
+| `PROXY_MAX_REDIRECTS` | `3` | Max redirects to follow |
 
 ## Page ID Rules
 

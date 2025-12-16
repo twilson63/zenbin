@@ -88,3 +88,122 @@ export function decodeHtml(html: string, encoding: 'utf-8' | 'base64' = 'utf-8')
   }
   return html;
 }
+
+/**
+ * Proxy request interfaces
+ */
+export interface ProxyAuth {
+  type: 'bearer' | 'basic' | 'api-key';
+  credentials: string;
+  headerName?: string; // For api-key type only
+}
+
+export interface ProxyRequest {
+  url: string;
+  method?: string;
+  body?: unknown;
+  timeout?: number;
+  contentType?: string;
+  accept?: string;
+  auth?: ProxyAuth;
+}
+
+const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
+
+// Headers that should not be overridden via auth.headerName
+const BLOCKED_HEADER_NAMES = new Set([
+  'host',
+  'content-length',
+  'transfer-encoding',
+  'connection',
+  'keep-alive',
+  'upgrade',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'authorization', // Already handled by bearer/basic auth types
+]);
+
+/**
+ * Validate a proxy request body
+ */
+export function validateProxyRequest(body: unknown, maxTimeout: number): ValidationError | null {
+  if (!body || typeof body !== 'object') {
+    return { field: 'body', message: 'Request body must be a JSON object' };
+  }
+
+  const data = body as Record<string, unknown>;
+
+  // Validate URL is present and valid
+  if (!data.url || typeof data.url !== 'string') {
+    return { field: 'url', message: 'url field is required and must be a string' };
+  }
+
+  try {
+    const parsedUrl = new URL(data.url);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return { field: 'url', message: 'url must use http or https protocol' };
+    }
+  } catch {
+    return { field: 'url', message: 'url must be a valid URL' };
+  }
+
+  // Validate method if provided
+  if (data.method !== undefined) {
+    if (typeof data.method !== 'string') {
+      return { field: 'method', message: 'method must be a string' };
+    }
+    if (!ALLOWED_METHODS.includes(data.method.toUpperCase())) {
+      return { field: 'method', message: `method must be one of: ${ALLOWED_METHODS.join(', ')}` };
+    }
+  }
+
+  // Validate timeout if provided
+  if (data.timeout !== undefined) {
+    if (typeof data.timeout !== 'number' || data.timeout <= 0) {
+      return { field: 'timeout', message: 'timeout must be a positive number' };
+    }
+    if (data.timeout > maxTimeout) {
+      return { field: 'timeout', message: `timeout must not exceed ${maxTimeout}ms` };
+    }
+  }
+
+  // Validate contentType if provided
+  if (data.contentType !== undefined && typeof data.contentType !== 'string') {
+    return { field: 'contentType', message: 'contentType must be a string' };
+  }
+
+  // Validate accept if provided
+  if (data.accept !== undefined && typeof data.accept !== 'string') {
+    return { field: 'accept', message: 'accept must be a string' };
+  }
+
+  // Validate auth if provided
+  if (data.auth !== undefined) {
+    if (typeof data.auth !== 'object' || data.auth === null) {
+      return { field: 'auth', message: 'auth must be an object' };
+    }
+
+    const auth = data.auth as Record<string, unknown>;
+    
+    if (!['bearer', 'basic', 'api-key'].includes(auth.type as string)) {
+      return { field: 'auth.type', message: 'auth.type must be "bearer", "basic", or "api-key"' };
+    }
+
+    if (typeof auth.credentials !== 'string' || auth.credentials.length === 0) {
+      return { field: 'auth.credentials', message: 'auth.credentials is required and must be a non-empty string' };
+    }
+
+    if (auth.type === 'api-key' && auth.headerName !== undefined) {
+      if (typeof auth.headerName !== 'string' || auth.headerName.length === 0) {
+        return { field: 'auth.headerName', message: 'auth.headerName must be a non-empty string' };
+      }
+      if (BLOCKED_HEADER_NAMES.has(auth.headerName.toLowerCase())) {
+        return { field: 'auth.headerName', message: 'auth.headerName cannot override restricted headers' };
+      }
+    }
+  }
+
+  return null;
+}

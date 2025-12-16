@@ -141,6 +141,76 @@ After publishing, the page is available at:
 
 - **Rendered:** \`${config.baseUrl}/p/{id}\`
 - **Raw HTML:** \`${config.baseUrl}/p/{id}/raw\`
+
+## Making External API Calls (Proxy)
+
+ZenBin-hosted pages can make external API calls through the built-in proxy to bypass CORS restrictions.
+
+### Endpoint
+
+\`\`\`
+POST ${config.baseUrl}/api/proxy
+Content-Type: application/json
+\`\`\`
+
+### Request Body
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`url\` | Yes | Target URL (must be http/https) |
+| \`method\` | No | HTTP method (default: "GET") |
+| \`body\` | No | Request body to forward (JSON) |
+| \`timeout\` | No | Timeout in ms (max: 30000) |
+| \`contentType\` | No | Content-Type for outgoing request |
+| \`accept\` | No | Accept header for outgoing request |
+| \`auth\` | No | Authentication configuration (see below) |
+
+### Authentication Options
+
+| Type | Usage | Result Header |
+|------|-------|---------------|
+| \`bearer\` | \`{ type: "bearer", credentials: "token" }\` | \`Authorization: Bearer token\` |
+| \`basic\` | \`{ type: "basic", credentials: "base64" }\` | \`Authorization: Basic base64\` |
+| \`api-key\` | \`{ type: "api-key", credentials: "key", headerName: "X-API-Key" }\` | \`X-API-Key: key\` |
+
+### Response
+
+\`\`\`json
+{
+  "status": 200,
+  "statusText": "OK",
+  "headers": { "content-type": "application/json" },
+  "body": { ... }
+}
+\`\`\`
+
+### Example Usage
+
+\`\`\`javascript
+// From your ZenBin-hosted page
+const response = await fetch('/api/proxy', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    url: 'https://api.example.com/data',
+    method: 'GET',
+    auth: {
+      type: 'bearer',
+      credentials: 'your-api-token'
+    }
+  })
+});
+
+const data = await response.json();
+console.log(data.body); // The actual API response
+\`\`\`
+
+### Proxy Limits
+
+- Rate limit: 5 requests per minute
+- Max request/response size: 5MB
+- Max timeout: 30 seconds
+- Only accessible from ZenBin-hosted pages
 `;
 
 // GET /api/agent - Return agent instructions as markdown
