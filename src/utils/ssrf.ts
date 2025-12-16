@@ -66,11 +66,31 @@ function isPrivateIPv4(ip: string): boolean {
 }
 
 function isPrivateIPv6(ip: string): boolean {
+  // Check for IPv4-mapped IPv6 addresses (::ffff:192.168.1.1) first
+  // These should be validated against IPv4 private ranges
+  if (ip.includes('.')) {
+    const match = ip.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+    if (match) {
+      return isPrivateIPv4(match[1]);
+    }
+  }
+
   const normalized = normalizeIPv6(ip);
 
   // ::1 (localhost)
   if (normalized === '0000:0000:0000:0000:0000:0000:0000:0001') {
     return true;
+  }
+
+  // Check for IPv4-mapped addresses in normalized form (::ffff:7f00:1 = 127.0.0.1)
+  if (normalized.startsWith('0000:0000:0000:0000:0000:ffff:')) {
+    const lastTwoSegments = normalized.slice(-9); // "7f00:0001"
+    const [hex1, hex2] = lastTwoSegments.split(':');
+    const a = parseInt(hex1.slice(0, 2), 16);
+    const b = parseInt(hex1.slice(2, 4), 16);
+    const c = parseInt(hex2.slice(0, 2), 16);
+    const d = parseInt(hex2.slice(2, 4), 16);
+    return isPrivateIPv4(`${a}.${b}.${c}.${d}`);
   }
 
   // fc00::/7 (unique local) - fc00:: to fdff::

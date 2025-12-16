@@ -230,7 +230,9 @@ proxy.post('/', async (c) => {
       }
 
       const decoder = new TextDecoder();
-      responseBody = chunks.map(chunk => decoder.decode(chunk, { stream: true })).join('');
+      const decodedChunks = chunks.map(chunk => decoder.decode(chunk, { stream: true }));
+      decodedChunks.push(decoder.decode()); // Flush remaining bytes for multi-byte characters
+      responseBody = decodedChunks.join('');
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to read response body';

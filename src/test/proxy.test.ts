@@ -262,6 +262,25 @@ describe('isPrivateIP - Unit Tests', () => {
   it('should identify IPv6 link-local (fe80::/10) as private', () => {
     expect(isPrivateIP('fe80::1')).toBe(true);
   });
+
+  it('should identify IPv4-mapped IPv6 localhost (::ffff:127.0.0.1) as private', () => {
+    expect(isPrivateIP('::ffff:127.0.0.1')).toBe(true);
+  });
+
+  it('should identify IPv4-mapped IPv6 private IPs as private', () => {
+    expect(isPrivateIP('::ffff:10.0.0.1')).toBe(true);
+    expect(isPrivateIP('::ffff:192.168.1.1')).toBe(true);
+    expect(isPrivateIP('::ffff:172.16.0.1')).toBe(true);
+  });
+
+  it('should identify IPv4-mapped IPv6 metadata endpoint as private', () => {
+    expect(isPrivateIP('::ffff:169.254.169.254')).toBe(true);
+  });
+
+  it('should not identify IPv4-mapped IPv6 public IPs as private', () => {
+    expect(isPrivateIP('::ffff:8.8.8.8')).toBe(false);
+    expect(isPrivateIP('::ffff:1.1.1.1')).toBe(false);
+  });
 });
 
 describe('validateProxyRequest - Unit Tests', () => {
@@ -385,6 +404,41 @@ describe('validateProxyRequest - Unit Tests', () => {
       const result = validateProxyRequest({
         url: 'https://example.com',
         auth: { type: 'api-key', credentials: 'secret-key', headerName: '' },
+      }, maxTimeout);
+      expect(result?.field).toBe('auth.headerName');
+    });
+
+    it('should reject blocked header names (Host)', () => {
+      const result = validateProxyRequest({
+        url: 'https://example.com',
+        auth: { type: 'api-key', credentials: 'secret-key', headerName: 'Host' },
+      }, maxTimeout);
+      expect(result?.field).toBe('auth.headerName');
+      expect(result?.message).toContain('restricted');
+    });
+
+    it('should reject blocked header names (Authorization)', () => {
+      const result = validateProxyRequest({
+        url: 'https://example.com',
+        auth: { type: 'api-key', credentials: 'secret-key', headerName: 'Authorization' },
+      }, maxTimeout);
+      expect(result?.field).toBe('auth.headerName');
+      expect(result?.message).toContain('restricted');
+    });
+
+    it('should reject blocked header names case-insensitively', () => {
+      const result = validateProxyRequest({
+        url: 'https://example.com',
+        auth: { type: 'api-key', credentials: 'secret-key', headerName: 'content-length' },
+      }, maxTimeout);
+      expect(result?.field).toBe('auth.headerName');
+      expect(result?.message).toContain('restricted');
+    });
+
+    it('should reject Transfer-Encoding header', () => {
+      const result = validateProxyRequest({
+        url: 'https://example.com',
+        auth: { type: 'api-key', credentials: 'secret-key', headerName: 'Transfer-Encoding' },
       }, maxTimeout);
       expect(result?.field).toBe('auth.headerName');
     });

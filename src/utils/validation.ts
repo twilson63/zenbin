@@ -110,6 +110,21 @@ export interface ProxyRequest {
 
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
 
+// Headers that should not be overridden via auth.headerName
+const BLOCKED_HEADER_NAMES = new Set([
+  'host',
+  'content-length',
+  'transfer-encoding',
+  'connection',
+  'keep-alive',
+  'upgrade',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'authorization', // Already handled by bearer/basic auth types
+]);
+
 /**
  * Validate a proxy request body
  */
@@ -183,6 +198,9 @@ export function validateProxyRequest(body: unknown, maxTimeout: number): Validat
     if (auth.type === 'api-key' && auth.headerName !== undefined) {
       if (typeof auth.headerName !== 'string' || auth.headerName.length === 0) {
         return { field: 'auth.headerName', message: 'auth.headerName must be a non-empty string' };
+      }
+      if (BLOCKED_HEADER_NAMES.has(auth.headerName.toLowerCase())) {
+        return { field: 'auth.headerName', message: 'auth.headerName cannot override restricted headers' };
       }
     }
   }
