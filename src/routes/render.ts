@@ -13,7 +13,7 @@ const SECURITY_HEADERS = {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    "connect-src 'none'",
+    "connect-src *", // Allow hosted apps to make fetch/WebSocket requests
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
