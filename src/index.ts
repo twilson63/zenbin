@@ -9,6 +9,8 @@ import { render } from './routes/render.js';
 import { agent } from './routes/agent.js';
 import { landing } from './routes/landing.js';
 import { rateLimit } from './middleware/rateLimit.js';
+import { proxyRateLimit } from './middleware/proxyRateLimit.js';
+import { proxy } from './routes/proxy.js';
 
 const app = new Hono();
 
@@ -30,6 +32,10 @@ app.route('/v1/pages', pages);
 
 // Agent instructions
 app.route('/api/agent', agent);
+
+// Proxy endpoint (with stricter rate limiting)
+app.use('/api/proxy/*', proxyRateLimit);
+app.route('/api/proxy', proxy);
 
 // Render routes
 app.route('/p', render);
@@ -79,11 +85,13 @@ Endpoints:
   GET  /p/{id}         - Render page in browser
   GET  /p/{id}/raw     - Fetch raw HTML
   GET  /api/agent      - Agent instructions (markdown)
+  POST /api/proxy       - Proxy external requests (CORS bypass)
   GET  /health         - Health check
 
 Configuration:
   Max payload size: ${config.maxPayloadSize} bytes
   Rate limit: ${config.rateLimitMaxRequests} requests per ${config.rateLimitWindowMs / 1000}s
+  Proxy rate limit: ${config.proxyRateLimitMax} requests per ${config.proxyRateLimitWindowMs / 1000}s
 `);
     });
 
