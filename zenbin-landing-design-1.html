@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ZenBin - API-first HTML sandbox. Post HTML, get a URL instantly. No account, no setup, no friction.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ZenBin - Post HTML, Get URL">
+  <meta name="twitter:description" content="API-first HTML sandbox. No account, no setup, no wait.">
+  <meta property="og:title" content="ZenBin - Post HTML, Get URL Instantly">
+  <meta property="og:description" content="API-first HTML sandbox. No account, no setup, no wait.">
+  <meta property="og:type" content="website">
+  <title>ZenBin — Post HTML, Get URL Instantly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* Reset & Base */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #09090b;
+      --bg-elevated: #18181b;
+      --bg-card: #1c1c1f;
+      --fg: #fafafa;
+      --fg-muted: #a1a1aa;
+      --fg-subtle: #71717a;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --accent-solid: #4f46e5;
+      --border: #27272a;
+      --border-subtle: #1f1f23;
+      --success: #22c55e;
+      --code-bg: #0d0d0f;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    }
+
+    html {
+      font-size: 16px;
+      scroll-behavior: smooth;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Typography Scale */
+    .text-xs { font-size: 0.75rem; line-height: 1.5; }
+    .text-sm { font-size: 0.875rem; line-height: 1.5; }
+    .text-base { font-size: 1rem; line-height: 1.6; }
+    .text-lg { font-size: 1.125rem; line-height: 1.6; }
+    .text-xl { font-size: 1.25rem; line-height: 1.5; }
+    .text-2xl { font-size: 1.5rem; line-height: 1.4; }
+    .text-3xl { font-size: 1.875rem; line-height: 1.3; }
+    .text-4xl { font-size: 2.25rem; line-height: 1.2; }
+    .text-5xl { font-size: 3rem; line-height: 1.1; }
+    .text-6xl { font-size: 3.75rem; line-height: 1; }
+
+    @media (min-width: 768px) {
+      .md\:text-5xl { font-size: 3rem; }
+      .md\:text-6xl { font-size: 3.75rem; }
+      .md\:text-7xl { font-size: 4.5rem; }
+    }
+
+    /* Layout */
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    @media (min-width: 768px) {
+      .container { padding: 0 2rem; }
+    }
+
+    /* Navigation */
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(9, 9, 11, 0.8);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--fg);
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.875rem;
+    }
+
+    .logo-text {
+      font-weight: 700;
+      font-size: 1.125rem;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.875rem;
+      border-radius: var(--radius-sm);
+      color: var(--fg-muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--fg);
+      background: var(--bg-elevated);
+    }
+
+    .nav-link-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .nav-link-primary:hover {
+      background: var(--accent-hover);
+      color: white;
+    }
+
+    /* Hero Section */
+    .hero {
+      position: relative;
+      padding: 8rem 0 4rem;
+      overflow: hidden;
+    }
+
+    @media (min-width: 768px) {
+      .hero { padding: 10rem 0 6rem; }
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      overflow: hidden;
+    }
+
+    .hero-glow {
+      position: absolute;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 600px;
+      background: radial-gradient(ellipse at center, var(--accent-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-grid {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 60%);
+      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 60%);
+    }
+
+    .hero-content {
+      text-align: center;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem 0.875rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--fg-muted);
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .hero-title {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-bottom: 1.25rem;
+      background: linear-gradient(180deg, var(--fg) 0%, var(--fg-muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    @media (min-width: 768px) {
+      .hero-title {
+        font-size: 4rem;
+      }
+    }
+
+    @media (min-width: 1024px) {
+      .hero-title {
+        font-size: 4.5rem;
+      }
+    }
+
+    .hero-highlight {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: 1.125rem;
+      color: var(--fg-muted);
+      max-width: 600px;
+      margin: 0 auto 2rem;
+      line-height: 1.7;
+    }
+
+    @media (min-width: 768px) {
+      .hero-subtitle { font-size: 1.25rem; }
+    }
+
+    .hero-cta {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 3rem;
+    }
+
+    @media (min-width: 640px) {
+      .hero-cta { flex-direction: row; }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1.75rem;
+      border-radius: var(--radius-md);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-solid) 100%);
+      color: white;
+      box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.5), 0 4px 16px rgba(99, 102, 241, 0.25);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.7), 0 8px 24px rgba(99, 102, 241, 0.35);
+    }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--fg);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card);
+      border-color: var(--fg-subtle);
+    }
+
+    .btn-arrow {
+      transition: transform 0.15s ease;
+    }
+
+    .btn:hover .btn-arrow {
+      transform: translateX(2px);
+    }
+
+    /* Code Block */
+    .code-container {
+      position: relative;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    .code-window {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 
+        0 0 0 1px rgba(255,255,255,0.02),
+        0 8px 32px rgba(0,0,0,0.4),
+        0 0 80px rgba(99, 102, 241, 0.08);
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1rem;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .code-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .code-dot-red { background: #ff5f57; }
+    .code-dot-yellow { background: #febc2e; }
+    .code-dot-green { background: #28c840; }
+
+    .code-title {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: var(--fg-subtle);
+      font-family: var(--font-mono);
+    }
+
+    .code-body {
+      padding: 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      line-height: 1.7;
+      overflow-x: auto;
+    }
+
+    @media (min-width: 768px) {
+      .code-body { font-size: 0.875rem; padding: 1.5rem; }
+    }
+
+    .code-line {
+      display: block;
+    }
+
+    .code-prompt { color: var(--success); }
+    .code-command { color: var(--fg); }
+    .code-flag { color: #f472b6; }
+    .code-string { color: #a3e635; }
+    .code-comment { color: var(--fg-subtle); }
+    .code-url { color: var(--accent-hover); }
+
+    .code-output {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px dashed var(--border);
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 2rem;
+      padding: 2rem 0;
+      margin-top: 3rem;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--fg);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      font-size: 0.8125rem;
+      color: var(--fg-subtle);
+      margin-top: 0.25rem;
+    }
+
+    /* Section */
+    .section {
+      padding: 5rem 0;
+    }
+
+    @media (min-width: 768px) {
+      .section { padding: 7rem 0; }
+    }
+
+    .section-header {
+      text-align: center;
+      max-width: 600px;
+      margin: 0 auto 3.5rem;
+    }
+
+    .section-label {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+
+    .section-title {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    @media (min-width: 768px) {
+      .section-title { font-size: 2.5rem; }
+    }
+
+    .section-desc {
+      font-size: 1.0625rem;
+      color: var(--fg-muted);
+      line-height: 1.7;
+    }
+
+    /* Features Grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    @media (min-width: 640px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (min-width: 1024px) {
+      .features-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .feature-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .feature-card:hover {
+      border-color: var(--fg-subtle);
+      transform: translateY(-2px);
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent-glow) 0%, transparent 100%);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .feature-title {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .feature-desc {
+      font-size: 0.8125rem;
+      color: var(--fg-muted);
+      line-height: 1.6;
+    }
+
+    /* Use Cases */
+    .use-cases {
+      display: grid;
+      gap: 1rem;
+    }
+
+    @media (min-width: 768px) {
+      .use-cases { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .use-case {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+      transition: all 0.2s ease;
+    }
+
+    .use-case:hover {
+      border-color: var(--accent);
+    }
+
+    .use-case-icon {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .use-case-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .use-case-desc {
+      font-size: 0.875rem;
+      color: var(--fg-muted);
+      line-height: 1.6;
+      margin-bottom: 1rem;
+    }
+
+    .use-case-code {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--accent-hover);
+      background: var(--code-bg);
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius-sm);
+      display: inline-block;
+    }
+
+    /* API Section */
+    .api-section {
+      background: linear-gradient(180deg, var(--bg) 0%, var(--bg-elevated) 50%, var(--bg) 100%);
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .api-grid {
+      display: grid;
+      gap: 2rem;
+    }
+
+    @media (min-width: 1024px) {
+      .api-grid { grid-template-columns: 1fr 1fr; gap: 3rem; }
+    }
+
+    .api-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .api-block-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.875rem 1rem;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .api-block-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--fg-muted);
+    }
+
+    .api-badge {
+      font-size: 0.625rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 0.25rem 0.5rem;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--success);
+    }
+
+    .api-block-body {
+      padding: 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      line-height: 1.7;
+      overflow-x: auto;
+    }
+
+    @media (min-width: 768px) {
+      .api-block-body { padding: 1.5rem; font-size: 0.875rem; }
+    }
+
+    .method { color: var(--success); font-weight: 600; }
+    .endpoint { color: var(--accent-hover); }
+    .key { color: #f472b6; }
+    .value { color: #a3e635; }
+    .bracket { color: var(--fg-subtle); }
+
+    /* OnHyper CTA */
+    .cta-section {
+      text-align: center;
+      padding: 5rem 0;
+    }
+
+    @media (min-width: 768px) {
+      .cta-section { padding: 7rem 0; }
+    }
+
+    .cta-card {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.02) 100%);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: var(--radius-xl);
+      padding: 3rem 2rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    @media (min-width: 768px) {
+      .cta-card { padding: 4rem 3rem; }
+    }
+
+    .cta-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem 0.875rem;
+      background: var(--accent);
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: white;
+      margin-bottom: 1.5rem;
+    }
+
+    .cta-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    @media (min-width: 768px) {
+      .cta-title { font-size: 2.25rem; }
+    }
+
+    .cta-desc {
+      font-size: 1.0625rem;
+      color: var(--fg-muted);
+      max-width: 500px;
+      margin: 0 auto 2rem;
+      line-height: 1.7;
+    }
+
+    .cta-features {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .cta-feature {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.875rem;
+      color: var(--fg-muted);
+    }
+
+    .cta-check {
+      color: var(--success);
+    }
+
+    /* Footer */
+    .footer {
+      border-top: 1px solid var(--border-subtle);
+      padding: 3rem 0;
+    }
+
+    .footer-inner {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    @media (min-width: 768px) {
+      .footer-inner { flex-direction: row; justify-content: space-between; align-items: center; }
+    }
+
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .footer-logo {
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.625rem;
+    }
+
+    .footer-copy {
+      font-size: 0.8125rem;
+      color: var(--fg-subtle);
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .footer-link {
+      font-size: 0.8125rem;
+      color: var(--fg-muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .footer-link:hover {
+      color: var(--fg);
+    }
+
+    .footer-powered {
+      font-size: 0.75rem;
+      color: var(--fg-subtle);
+    }
+
+    .footer-powered a {
+      color: var(--accent-hover);
+      text-decoration: none;
+    }
+
+    .footer-powered a:hover {
+      text-decoration: underline;
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-fade-in-up {
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    .delay-1 { animation-delay: 0.1s; opacity: 0; }
+    .delay-2 { animation-delay: 0.2s; opacity: 0; }
+    .delay-3 { animation-delay: 0.3s; opacity: 0; }
+    .delay-4 { animation-delay: 0.4s; opacity: 0; }
+
+    /* Utility */
+    .text-center { text-align: center; }
+    .text-muted { color: var(--fg-muted); }
+    .text-subtle { color: var(--fg-subtle); }
+    .mt-2 { margin-top: 0.5rem; }
+    .mt-4 { margin-top: 1rem; }
+    .mt-8 { margin-top: 2rem; }
+    .mb-4 { margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a href="#" class="logo">
+        <div class="logo-icon">Z</div>
+        <span class="logo-text">ZenBin</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#api" class="nav-link">API</a>
+        <a href="https://github.com/onhyper/zenbin" class="nav-link" target="_blank">
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+          GitHub
+        </a>
+        <a href="https://onhyper.io" class="nav-link nav-link-primary" target="_blank">
+          Try OnHyper
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-bg">
+      <div class="hero-glow"></div>
+      <div class="hero-grid"></div>
+    </div>
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-badge animate-fade-in-up">
+          <span class="hero-badge-dot"></span>
+          API-first HTML hosting
+        </div>
+        <h1 class="hero-title animate-fade-in-up delay-1">
+          Post HTML, Get URL<br>
+          <span class="hero-highlight">— Instantly</span>
+        </h1>
+        <p class="hero-subtitle animate-fade-in-up delay-2">
+          Publish HTML pages via a simple API. No account, no setup, no friction. 
+          Sub-100ms response times. Perfect for agents, prototypes, and demos.
+        </p>
+        <div class="hero-cta animate-fade-in-up delay-3">
+          <a href="#api" class="btn btn-primary">
+            Get started
+            <svg class="btn-arrow" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </a>
+          <a href="https://github.com/onhyper/zenbin" class="btn btn-secondary" target="_blank">
+            View on GitHub
+          </a>
+        </div>
+        
+        <!-- Code Example -->
+        <div class="code-container animate-fade-in-up delay-4">
+          <div class="code-window">
+            <div class="code-header">
+              <span class="code-dot code-dot-red"></span>
+              <span class="code-dot code-dot-yellow"></span>
+              <span class="code-dot code-dot-green"></span>
+              <span class="code-title">terminal</span>
+            </div>
+            <div class="code-body">
+              <span class="code-line"><span class="code-prompt">$</span> <span class="code-command">curl</span> <span class="code-flag">-X</span> POST https://zenbin.io/v1/pages/demo \</span>
+              <span class="code-line">  <span class="code-flag">-H</span> <span class="code-string">"Content-Type: application/json"</span> \</span>
+              <span class="code-line">  <span class="code-flag">-d</span> <span class="code-string">'{"html":"<h1>Hello World</h1>"}'</span></span>
+              <div class="code-output">
+                <span class="code-line"><span class="code-comment"># Response:</span></span>
+                <span class="code-line"><span class="code-url">https://zenbin.io/p/demo</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-bar">
+          <div class="stat">
+            <div class="stat-value">&lt;100ms</div>
+            <div class="stat-label">Response time</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">Zero</div>
+            <div class="stat-label">Setup required</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">Free</div>
+            <div class="stat-label">Forever</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Features</span>
+        <h2 class="section-title">Everything you need, nothing you don't</h2>
+        <p class="section-desc">
+          Built for developers who value simplicity. Post HTML, markdown, or both. 
+          Add auth if you need it. That's it.
+        </p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3 class="feature-title">Blazing Fast</h3>
+          <p class="feature-desc">Sub-100ms page creation. No cold starts, no waiting. Instant gratification.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔓</div>
+          <h3 class="feature-title">No Account</h3>
+          <p class="feature-desc">Start using immediately. No signup, no API keys, no credit card. Just curl.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📝</div>
+          <h3 class="feature-title">Markdown Support</h3>
+          <p class="feature-desc">Store markdown alongside HTML. Perfect for docs with rendered output.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3 class="feature-title">Optional Auth</h3>
+          <p class="feature-desc">Password or token protection when you need it. Privacy without complexity.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔌</div>
+          <h3 class="feature-title">RESTful API</h3>
+          <p class="feature-desc">Clean, predictable endpoints. POST to create, GET to retrieve. Simple.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🌐</div>
+          <h3 class="feature-title">CORS Proxy</h3>
+          <p class="feature-desc">Built-in proxy endpoint for external requests. Bypass browser restrictions.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🤖</div>
+          <h3 class="feature-title">Agent Ready</h3>
+          <p class="feature-desc">Special <code>/api/agent</code> endpoint for AI-generated content. Built for the future.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📦</div>
+          <h3 class="feature-title">Raw Access</h3>
+          <p class="feature-desc">Get raw HTML or markdown via <code>/raw</code> and <code>/md</code> endpoints.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Use Cases -->
+  <section class="section" style="background: var(--bg-elevated);">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Use Cases</span>
+        <h2 class="section-title">Built for modern workflows</h2>
+        <p class="section-desc">
+          Whether you're building AI agents, shipping prototypes, or sharing docs — 
+          ZenBin fits your flow.
+        </p>
+      </div>
+
+      <div class="use-cases">
+        <div class="use-case">
+          <div class="use-case-icon">🤖</div>
+          <h3 class="use-case-title">AI Agent Output</h3>
+          <p class="use-case-desc">
+            Agents generate HTML? Publish their output instantly. Let users see what your AI created with a single curl command.
+          </p>
+          <code class="use-case-code">POST /v1/pages/{id} with agent-generated HTML</code>
+        </div>
+        <div class="use-case">
+          <div class="use-case-icon">📋</div>
+          <h3 class="use-case-title">Quick Prototypes</h3>
+          <p class="use-case-desc">
+            Testing an idea? Skip the deploy pipeline. One curl, instant URL, share with anyone. Perfect for wireframes and demos.
+          </p>
+          <code class="use-case-code">Perfect for wireframes, demos, proofs of concept</code>
+        </div>
+        <div class="use-case">
+          <div class="use-case-icon">📚</div>
+          <h3 class="use-case-title">Documentation</h3>
+          <p class="use-case-desc">
+            Render docs with code examples. Store markdown source, serve HTML. Add live API demos inline.
+          </p>
+          <code class="use-case-code">GET /p/{id}/md — retrieve markdown source</code>
+        </div>
+        <div class="use-case">
+          <div class="use-case-icon">🛠️</div>
+          <h3 class="use-case-title">Tool Output</h3>
+          <p class="use-case-desc">
+            Building a tool that creates HTML? Give users instant hosted output. No infrastructure needed.
+          </p>
+          <code class="use-case-code">Report generators, formatters, linters</code>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- API Section -->
+  <section id="api" class="section api-section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">API</span>
+        <h2 class="section-title">Simple, RESTful, Obvious</h2>
+        <p class="section-desc">
+          One endpoint to create, one to retrieve. No auth headers, no tokens. Just POST your HTML.
+        </p>
+      </div>
+
+      <div class="api-grid">
+        <div class="api-block">
+          <div class="api-block-header">
+            <span class="api-block-title">Create a page</span>
+            <span class="api-badge">POST</span>
+          </div>
+          <div class="api-block-body">
+            <span class="code-line"><span class="method">POST</span> <span class="endpoint">/v1/pages/{id}</span></span>
+            <span class="code-line"><span class="key">Content-Type</span>: application/json</span>
+            <span class="code-line mt-4"><span class="bracket">{</span></span>
+            <span class="code-line">  <span class="key">"html"</span>: <span class="value">"&lt;h1&gt;Hello World&lt;/h1&gt;"</span>,</span>
+            <span class="code-line">  <span class="key">"markdown"</span>: <span class="value">"# Hello World"</span>,</span>
+            <span class="code-line">  <span class="key">"title"</span>: <span class="value">"My Page"</span>,</span>
+            <span class="code-line">  <span class="key">"auth"</span>: <span class="bracket">{</span> <span class="key">"password"</span>: <span class="value">"secret"</span> <span class="bracket">}</span></span>
+            <span class="code-line"><span class="bracket">}</span></span>
+          </div>
+        </div>
+
+        <div class="api-block">
+          <div class="api-block-header">
+            <span class="api-block-title">Response</span>
+            <span class="api-badge" style="background: rgba(99, 102, 241, 0.15); color: var(--accent-hover);">JSON</span>
+          </div>
+          <div class="api-block-body">
+            <span class="code-line"><span class="bracket">{</span></span>
+            <span class="code-line">  <span class="key">"id"</span>: <span class="value">"my-page"</span>,</span>
+            <span class="code-line">  <span class="key">"url"</span>: <span class="value">"https://zenbin.io/p/my-page"</span>,</span>
+            <span class="code-line">  <span class="key">"raw_url"</span>: <span class="value">"https://zenbin.io/p/my-page/raw"</span>,</span>
+            <span class="code-line">  <span class="key">"markdown_url"</span>: <span class="value">"https://zenbin.io/p/my-page/md"</span></span>
+            <span class="code-line"><span class="bracket">}</span></span>
+            <span class="code-line mt-4"><span class="code-comment"># That's it. No auth headers. No tokens. Just POST.</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-center mt-8">
+        <a href="https://github.com/onhyper/zenbin#api" class="btn btn-secondary" target="_blank">
+          View full API docs
+          <svg class="btn-arrow" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- OnHyper CTA -->
+  <section class="cta-section">
+    <div class="container">
+      <div class="cta-card">
+        <span class="cta-badge">
+          🚀 Powered by OnHyper
+        </span>
+        <h2 class="cta-title">Want more than single pages?</h2>
+        <p class="cta-desc">
+          ZenBin is perfect for pages. OnHyper lets you build full apps with API keys, 
+          custom domains, and server-side logic.
+        </p>
+        <div class="cta-features">
+          <span class="cta-feature">
+            <span class="cta-check">✓</span> Store API keys securely
+          </span>
+          <span class="cta-feature">
+            <span class="cta-check">✓</span> Call any API from browser
+          </span>
+          <span class="cta-feature">
+            <span class="cta-check">✓</span> Custom subdomains
+          </span>
+          <span class="cta-feature">
+            <span class="cta-check">✓</span> Built-in analytics
+          </span>
+        </div>
+        <a href="https://onhyper.io" class="btn btn-primary" target="_blank">
+          Explore OnHyper
+          <svg class="btn-arrow" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+        <div>
+          <div class="footer-brand">
+            <div class="footer-logo">Z</div>
+            <span class="footer-copy">© 2026 ZenBin</span>
+          </div>
+          <p class="footer-powered mt-2">
+            Powered by <a href="https://onhyper.io" target="_blank">OnHyper</a> · MIT License
+          </p>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/onhyper/zenbin" class="footer-link" target="_blank">GitHub</a>
+          <a href="https://github.com/onhyper/zenbin#api" class="footer-link" target="_blank">API Docs</a>
+          <a href="https://onhyper.io" class="footer-link" target="_blank">OnHyper</a>
+          <a href="https://twitter.com/hyperio_mc" class="footer-link" target="_blank">Twitter</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
