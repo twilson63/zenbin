@@ -902,6 +902,8 @@ const getHtml = () => `<!DOCTYPE html>
   </style>
 </head>
 <body>
+	<scout-copilot copilot_id="copilot_cmn52ebxg00020hs6lcv9wy36"></scout-copilot>
+	<script type="module" src="https://copilot.scoutos.com/copilot.js"></script>
   <!-- Navigation -->
   <nav>
     <div class="nav-content">
