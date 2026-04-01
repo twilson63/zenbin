@@ -10,17 +10,18 @@ export interface PageAuth {
 // Page data model
 export interface Page {
   id: string;
-  subdomain?: string;      // NEW: which subdomain owns this page
+  subdomain?: string;      // which subdomain owns this page
   html: string;
   markdown?: string;
-  image?: string;          // Base64-encoded image data
+  image?: string;           // Base64-encoded image data
+  video?: string;          // Path to video file on disk (relative to videoStoragePath)
   encoding: 'utf-8' | 'base64';
   content_type: string;
   title?: string;
   etag: string;
   created_at: string;
   updated_at: string;
-  auth?: PageAuth;  // Optional - undefined means public page
+  auth?: PageAuth;         // Optional - undefined means public page
 }
 
 // Subdomain data model
@@ -86,6 +87,7 @@ export async function savePage(
     html?: string;
     markdown?: string;
     image?: string;
+    video?: string;           // Path to video file on disk (relative)
     encoding?: 'utf-8' | 'base64';
     content_type?: string;
     title?: string;
@@ -107,6 +109,7 @@ export async function savePage(
     html: data.html || '',
     markdown: data.markdown,
     image: data.image,
+    video: data.video,
     encoding: data.encoding || 'utf-8',
     content_type: data.content_type || 'text/html; charset=utf-8',
     title: data.title,

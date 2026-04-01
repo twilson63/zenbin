@@ -8,6 +8,7 @@ import { validateSubdomainName } from './subdomains.js';
 import { trackApiCall, trackPageCreated } from '../analytics/posthog.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
 import { deletePage as deletePageFromDb } from '../storage/db.js';
+import { saveVideo, deleteVideo } from '../storage/video.js';
 
 const pages = new Hono();
 
@@ -15,6 +16,7 @@ interface CreatePageBody {
   html?: string;
   markdown?: string;
   image?: string;
+  video?: string;  // Base64-encoded video data
   encoding?: 'utf-8' | 'base64';
   markdown_encoding?: 'utf-8' | 'base64';
   content_type?: string;
@@ -136,8 +138,15 @@ pages.post('/:id', async (c) => {
   // Image is stored as base64 (validated already)
   const imageData = body.image;
 
+  // Handle video: decode base64 and save to filesystem
+  let videoPath: string | undefined;
+  if (body.video) {
+    const videoBuffer = Buffer.from(body.video, 'base64');
+    videoPath = await saveVideo(id, videoBuffer, body.content_type || 'video/mp4', subdomain);
+  }
+
   // Generate ETag from combined content
-  const etagContent = (decodedHtml || '') + (decodedMarkdown || '') + (imageData || '');
+  const etagContent = (decodedHtml || '') + (decodedMarkdown || '') + (imageData || '') + (videoPath || '');
   const etag = generateEtag(etagContent);
 
   // Process auth if provided
@@ -165,6 +174,7 @@ pages.post('/:id', async (c) => {
       html: decodedHtml,
       markdown: decodedMarkdown,
       image: imageData,
+      video: videoPath,
       encoding: 'utf-8',
       content_type: body.content_type,
       title: body.title,
@@ -231,6 +241,24 @@ pages.post('/:id', async (c) => {
     }
   }
 
+  // Add image URL if image was provided
+  if (page.image) {
+    if (subdomain) {
+      response.image_url = `${pageUrl}/image`;
+    } else {
+      response.image_url = `${baseUrl}/p/${page.id}/image`;
+    }
+  }
+
+  // Add video URL if video was provided
+  if (page.video) {
+    if (subdomain) {
+      response.video_url = `${pageUrl}/video`;
+    } else {
+      response.video_url = `${baseUrl}/p/${page.id}/video`;
+    }
+  }
+
   // Track page creation
   if (created) {
     trackPageCreated({
@@ -239,6 +267,7 @@ pages.post('/:id', async (c) => {
       contentType: page.content_type || 'text/html',
       hasMarkdown: !!page.markdown,
       hasImage: !!page.image,
+      hasVideo: !!page.video,
     });
   }
 
@@ -293,6 +322,11 @@ pages.delete('/:id', async (c) => {
   const deleted = await deletePageFromDb(id, subdomain);
   if (!deleted) {
     return c.json({ error: 'Failed to delete page' }, 500);
+  }
+
+  // Delete video file if exists
+  if (page.video) {
+    await deleteVideo(page.video);
   }
 
   // Decrement subdomain page count if applicable

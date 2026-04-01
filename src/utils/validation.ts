@@ -102,13 +102,33 @@ export function validatePageBody(body: unknown): ValidationError | null {
     }
   }
 
-  // At least one of html, markdown, or image must be provided
-  if (!data.html && !data.markdown && !data.image) {
-    return { field: 'body', message: 'At least one of html, markdown, or image is required' };
+  // Validate video field if provided
+  let videoSize = 0;
+  if (data.video !== undefined) {
+    if (typeof data.video !== 'string') {
+      return { field: 'video', message: 'video must be a base64-encoded string' };
+    }
+    try {
+      const decoded = Buffer.from(data.video as string, 'base64');
+      videoSize = decoded.length;
+    } catch {
+      return { field: 'video', message: 'Invalid base64 encoding for video' };
+    }
+    if (videoSize > config.maxVideoSize) {
+      return { 
+        field: 'video', 
+        message: `Video size exceeds maximum of ${config.maxVideoSize} bytes (${Math.round(config.maxVideoSize / 1024 / 1024)}MB)` 
+      };
+    }
+  }
+
+  // At least one of html, markdown, image, or video must be provided
+  if (!data.html && !data.markdown && !data.image && !data.video) {
+    return { field: 'body', message: 'At least one of html, markdown, image, or video is required' };
   }
 
   // For image-only pages, validate content_type is an image type
-  const isImagePage = data.image && !data.html && !data.markdown;
+  const isImagePage = data.image && !data.html && !data.markdown && !data.video;
   if (isImagePage) {
     const contentType = data.content_type as string | undefined;
     if (!contentType) {
@@ -121,6 +141,24 @@ export function validatePageBody(body: unknown): ValidationError | null {
       return { 
         field: 'content_type', 
         message: `content_type must be one of: ${config.allowedImageTypes.join(', ')}` 
+      };
+    }
+  }
+
+  // For video-only pages, validate content_type is a video type
+  const isVideoPage = data.video && !data.html && !data.markdown && !data.image;
+  if (isVideoPage) {
+    const contentType = data.content_type as string | undefined;
+    if (!contentType) {
+      return { field: 'content_type', message: 'content_type is required for video pages' };
+    }
+    if (typeof contentType !== 'string') {
+      return { field: 'content_type', message: 'content_type must be a string' };
+    }
+    if (!(config.allowedVideoTypes as readonly string[]).includes(contentType)) {
+      return { 
+        field: 'content_type', 
+        message: `content_type must be one of: ${config.allowedVideoTypes.join(', ')}` 
       };
     }
   }
