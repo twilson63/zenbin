@@ -105,7 +105,7 @@ Create or update a page.
   - `password` (string) - Password required to view page
   - `urlToken` (boolean) - Generate secret shareable URL
 
-**Note:** At least one of `html`, `markdown`, or `image` is required.
+**Note:** At least one of `html`, `markdown`, `image`, or `video` is required.
 
 **Updating Pages:**
 - Subdomain pages: Just POST again with same ID + `X-Subdomain` header
@@ -147,7 +147,7 @@ X-Subdomain: my-site                         # For subdomain pages
 
 Returns 204 No Content on success.
 
-**Maximum payload:** 512KB for HTML/markdown, 5MB for images
+**Maximum payload:** 512KB for HTML/markdown, 5MB for images, 100MB for videos
 
 ### Images
 
@@ -181,6 +181,39 @@ POST /v1/pages/photo2  → { "image": "...", "content_type": "image/jpeg" }
 ```
 
 **Note:** Image pages are dedicated - if you provide both `html` and `image`, the HTML takes precedence for `GET /p/{id}`, but the image is still accessible at `GET /p/{id}/image`.
+
+### Videos
+
+ZenBin supports dedicated video pages. Upload a video and it's served directly with the correct content type.
+
+```
+POST /v1/pages/my-video
+Content-Type: application/json
+
+{
+  "video": "AAAAIGZ0eXBpc29t...",
+  "content_type": "video/mp4"
+}
+```
+
+**Supported formats:** `video/mp4`, `video/webm`, `video/ogg`, `video/quicktime`, `video/x-msvideo`
+
+**Maximum size:** 100MB
+
+**Viewing:**
+- `GET /p/{id}` - Serves the video directly with correct `Content-Type`
+- `GET /p/{id}/video` - Explicit video endpoint (also works for pages with both HTML and video)
+
+**Example - Video gallery:**
+```
+# Upload videos
+POST /v1/pages/demo1  → { "video": "...", "content_type": "video/mp4" }
+POST /v1/pages/demo2  → { "video": "...", "content_type": "video/webm" }
+
+# View at https://my-site.zenbin.org/demo1
+```
+
+**Note:** Video pages are dedicated - if you provide both `html` and `video`, the HTML takes precedence for `GET /p/{id}`, but the video is still accessible at `GET /p/{id}/video`.
 
 #### GET /p/{id}
 
@@ -223,6 +256,7 @@ Get site statistics.
 4. **Documentation** - Store agent-generated docs with markdown source
 5. **Prototyping** - Quick demos without deployment infrastructure
 6. **Output Sharing** - Let users see agent work via professional URLs
+7. **Video Publishing** - Share demos, screencasts, and presentations as video pages
 
 ## Example: Create an Agent Dashboard Site
 
