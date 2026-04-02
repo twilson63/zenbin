@@ -101,6 +101,7 @@ export function trackPageCreated(params: {
   contentType: string;
   hasMarkdown: boolean;
   hasImage: boolean;
+  hasVideo: boolean;
 }): void {
   if (!client) return;
 
@@ -115,6 +116,7 @@ export function trackPageCreated(params: {
         content_type: params.contentType,
         has_markdown: params.hasMarkdown,
         has_image: params.hasImage,
+        has_video: params.hasVideo,
       },
     });
   } catch (error) {
