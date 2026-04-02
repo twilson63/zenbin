@@ -23,6 +23,17 @@ export const config = {
     'image/svg+xml',
   ],
 
+  // Video settings
+  videoStoragePath: process.env.VIDEO_STORAGE_PATH || './data/videos',
+  maxVideoSize: parseInt(process.env.MAX_VIDEO_SIZE || '104857600', 10), // 100MB default
+  allowedVideoTypes: [
+    'video/mp4',
+    'video/webm',
+    'video/ogg',
+    'video/quicktime',
+    'video/x-msvideo',
+  ],
+
   // Rate Limiting
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10),
   rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),

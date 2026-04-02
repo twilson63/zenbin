@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { config } from './config.js';
 import { initDatabase, closeDatabase } from './storage/db.js';
+import { initVideoStorage } from './storage/video.js';
 import { pages } from './routes/pages.js';
 import { render } from './routes/render.js';
 import { agent } from './routes/agent.js';
@@ -153,6 +154,10 @@ async function main() {
     initDatabase();
     console.log(`Database initialized at ${config.lmdbPath}`);
 
+    console.log('Initializing video storage...');
+    initVideoStorage();
+    console.log(`Video storage initialized at ${config.videoStoragePath}`);
+
     console.log('Initializing analytics...');
     initAnalytics();
 
@@ -191,6 +196,7 @@ Endpoints:
   GET  /p/{id}/raw              - Fetch raw HTML
   GET  /p/{id}/md               - Fetch markdown source
   GET  /p/{id}/image            - Fetch image content
+  GET  /p/{id}/video            - Stream video content (with Range support)
   GET  /{path} (subdomain)      - Render subdomain page
   GET  /api/agent               - Agent instructions (markdown)
   POST /api/proxy               - Proxy external requests (CORS bypass)

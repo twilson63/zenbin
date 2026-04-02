@@ -5,6 +5,7 @@ import { generateEtag, etagMatches } from '../utils/etag.js';
 import { verifyPassword, verifyUrlToken, parseBasicAuth } from '../utils/auth.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
 import { trackPageView } from '../analytics/posthog.js';
+import { videoExists, getVideoPath, getVideoStats, createVideoStream, getVideoMimeType } from '../storage/video.js';
 import type { Page } from '../storage/db.js';
 
 const render = new Hono();
@@ -329,6 +330,104 @@ render.get('/:id/raw', async (c) => {
   });
 
   return c.body(page.html);
+});
+
+// GET /p/:id/video - Stream video with Range support
+render.get('/:id/video', async (c) => {
+  const id = c.req.param('id');
+
+  const idError = validateId(id);
+  if (idError) {
+    return c.json({ error: idError.message }, 400);
+  }
+
+  const page = getPage(id);
+  if (!page) {
+    return c.json({ error: 'Page not found' }, 404);
+  }
+
+  const authResponse = await verifyPageAuth(c, page);
+  if (authResponse) {
+    return authResponse;
+  }
+
+  if (!page.video) {
+    return c.json({ error: 'Page has no video content' }, 404);
+  }
+
+  // Check if video file exists
+  if (!videoExists(page.video)) {
+    return c.json({ error: 'Video file not found' }, 404);
+  }
+
+  // Get video stats for size
+  const stats = await getVideoStats(page.video);
+  if (!stats) {
+    return c.json({ error: 'Video file not found' }, 404);
+  }
+
+  const fileSize = stats.size;
+  const mimeType = getVideoMimeType(page.video);
+
+  // Handle Range request for video seeking
+  const range = c.req.header('Range');
+  
+  if (range) {
+    // Parse Range header (e.g., "bytes=0-1023")
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    
+    // Validate range
+    if (start >= fileSize || end >= fileSize || start > end) {
+      return c.json({ error: 'Invalid range' }, 416);
+    }
+
+    const chunkSize = end - start + 1;
+    const stream = createVideoStream(page.video, { start, end });
+
+    if (!stream) {
+      return c.json({ error: 'Failed to stream video' }, 500);
+    }
+
+    c.header('Content-Type', mimeType);
+    c.header('Content-Length', String(chunkSize));
+    c.header('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+    c.header('Accept-Ranges', 'bytes');
+    c.header('Cache-Control', 'public, max-age=31536000'); // Cache videos for 1 year
+
+    // Track page view (video)
+    trackPageView({
+      pageId: id,
+      referrer: c.req.header('Referer'),
+      userAgent: c.req.header('User-Agent'),
+      ip: c.req.header('X-Forwarded-For') || c.req.header('X-Real-IP'),
+    });
+
+    return new Response(stream as any, { status: 206 });
+  }
+
+  // Full file request (no Range header)
+  const stream = createVideoStream(page.video);
+  
+  if (!stream) {
+    return c.json({ error: 'Failed to stream video' }, 500);
+  }
+
+  c.header('Content-Type', mimeType);
+  c.header('Content-Length', String(fileSize));
+  c.header('Accept-Ranges', 'bytes');
+  c.header('Cache-Control', 'public, max-age=31536000'); // Cache videos for 1 year
+
+  // Track page view (video)
+  trackPageView({
+    pageId: id,
+    referrer: c.req.header('Referer'),
+    userAgent: c.req.header('User-Agent'),
+    ip: c.req.header('X-Forwarded-For') || c.req.header('X-Real-IP'),
+  });
+
+  return new Response(stream as any);
 });
 
 export { render };
