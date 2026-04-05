@@ -169,6 +169,11 @@ render.get('/:id', async (c) => {
     return c.body(imageBuffer);
   }
 
+  // If page has video but no HTML, redirect to the video endpoint
+  if (page.video && !page.html) {
+    return c.redirect(`/p/${id}/video`, 302);
+  }
+
   // Check If-None-Match for caching HTML
   const ifNoneMatch = c.req.header('If-None-Match');
   if (etagMatches(ifNoneMatch, page.etag)) {
