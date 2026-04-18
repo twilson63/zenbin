@@ -5,6 +5,7 @@ import { generateEtag, etagMatches } from '../utils/etag.js';
 import { verifyPassword, verifyUrlToken, parseBasicAuth } from '../utils/auth.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
 import { trackPageView } from '../analytics/posthog.js';
+import { injectPostHog, shouldInjectPostHog } from '../utils/posthog-inject.js';
 import { videoExists, getVideoPath, getVideoStats, createVideoStream, getVideoMimeType } from '../storage/video.js';
 import type { Page } from '../storage/db.js';
 
@@ -197,7 +198,12 @@ render.get('/:id', async (c) => {
     ip: c.req.header('X-Forwarded-For') || c.req.header('X-Real-IP'),
   });
 
-  return c.body(page.html);
+  // Inject PostHog tracking for HTML pages
+  const html = shouldInjectPostHog(page.content_type || 'text/html') 
+    ? injectPostHog(page.html) 
+    : page.html;
+
+  return c.body(html);
 });
 
 // GET /p/:id/image - Serve image directly

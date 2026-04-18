@@ -144,9 +144,9 @@ export async function deletePage(id: string, subdomain?: string): Promise<boolea
   return true;
 }
 
-export function getPageCount(): number {
+export async function getPageCount(): Promise<number> {
   const db = getDatabase();
-  return db.getKeys().asArray.length;
+  return (await db.getKeys().asArray).length;
 }
 
 export function listPagesBySubdomain(subdomain: string): Page[] {
@@ -217,9 +217,9 @@ export async function deleteSubdomain(name: string): Promise<boolean> {
   return true;
 }
 
-export function getSubdomainCount(): number {
+export async function getSubdomainCount(): Promise<number> {
   const subdomainDb = getSubdomainDatabase();
-  return subdomainDb.getKeys().asArray.length;
+  return (await subdomainDb.getKeys().asArray).length;
 }
 
 export function incrementSubdomainPageCount(name: string): void {

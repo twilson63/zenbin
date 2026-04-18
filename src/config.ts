@@ -59,6 +59,7 @@ export const config = {
 
   // Analytics
   posthogKey: process.env.POSTHOG_KEY || '',
+  posthogHost: process.env.POSTHOG_HOST || 'https://us.i.posthog.com',
 
   // Free Tier
   freeTier: {
@@ -73,6 +74,14 @@ export const config = {
     maxPagesPerSubdomain: parseInt(process.env.SUBDOMAIN_MAX_PAGES || '10000', 10),
     reservedNames: (process.env.SUBDOMAIN_RESERVED_NAMES || 'www,api,mail,admin,blog,docs,help,support,status,billing,account,accounts,app,apps,dashboard,cdn,static,assets,img,images,image,forum,forums,wiki,news,m,dev,staging,test,testing,sandbox,beta,alpha,lab,labs,store,shop,pricing,legal,privacy,terms,security, careers,jobs,contact,about,home').split(',').filter(Boolean),
     baseDomain: process.env.SUBDOMAIN_BASE_DOMAIN || 'zenbin.org', // Fixed: zenbin.org
+  },
+
+  // Sharding (Content-Addressed Storage)
+  sharding: {
+    enabled: process.env.SHARDING_ENABLED === 'true', // default false for backwards compat
+    shardCount: parseInt(process.env.SHARD_COUNT || '1', 10),
+    hashLength: parseInt(process.env.SHARD_HASH_LENGTH || '16', 10), // 64-bit hash
+    metadataPath: process.env.SHARD_METADATA_PATH || '', // defaults to ${lmdbPath}-metadata
   },
 } as const;
 

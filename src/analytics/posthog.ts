@@ -102,6 +102,8 @@ export function trackPageCreated(params: {
   hasMarkdown: boolean;
   hasImage: boolean;
   hasVideo: boolean;
+  subdomain?: string;
+  contentSize: number;
 }): void {
   if (!client) return;
 
@@ -117,10 +119,156 @@ export function trackPageCreated(params: {
         has_markdown: params.hasMarkdown,
         has_image: params.hasImage,
         has_video: params.hasVideo,
+        subdomain: params.subdomain || null,
+        content_size_bytes: params.contentSize,
       },
     });
   } catch (error) {
     console.error('PostHog trackPageCreated error:', error);
+  }
+}
+
+/**
+ * Track a page updated event
+ */
+export function trackPageUpdated(params: {
+  pageId: string;
+  hasAuth: boolean;
+  contentType: string;
+  subdomain?: string;
+  contentSize: number;
+}): void {
+  if (!client) return;
+
+  try {
+    client.capture({
+      distinctId: `page:${params.pageId}`,
+      event: 'page_updated',
+      properties: {
+        app: 'zenbin',
+        page_id: params.pageId,
+        has_auth: params.hasAuth,
+        content_type: params.contentType,
+        subdomain: params.subdomain || null,
+        content_size_bytes: params.contentSize,
+      },
+    });
+  } catch (error) {
+    console.error('PostHog trackPageUpdated error:', error);
+  }
+}
+
+/**
+ * Track a page deleted event
+ */
+export function trackPageDeleted(params: {
+  pageId: string;
+  subdomain?: string;
+  hadAuth: boolean;
+  contentType: string;
+}): void {
+  if (!client) return;
+
+  try {
+    client.capture({
+      distinctId: `page:${params.pageId}`,
+      event: 'page_deleted',
+      properties: {
+        app: 'zenbin',
+        page_id: params.pageId,
+        subdomain: params.subdomain || null,
+        had_auth: params.hadAuth,
+        content_type: params.contentType,
+      },
+    });
+  } catch (error) {
+    console.error('PostHog trackPageDeleted error:', error);
+  }
+}
+
+/**
+ * Track a subdomain event
+ */
+export function trackSubdomainEvent(
+  event: 'subdomain_created' | 'subdomain_deleted',
+  subdomain: string,
+  metadata?: {
+    pageCount?: number;
+  reason?: string;
+  }
+): void {
+  if (!client) return;
+
+  try {
+    client.capture({
+      distinctId: `subdomain:${subdomain}`,
+      event,
+      properties: {
+        app: 'zenbin',
+        subdomain,
+        page_count: metadata?.pageCount || 0,
+        reason: metadata?.reason || null,
+      },
+    });
+  } catch (error) {
+    console.error('PostHog trackSubdomainEvent error:', error);
+  }
+}
+
+/**
+ * Track authentication events
+ */
+export function trackAuthEvent(params: {
+  event: 'auth_success' | 'auth_failed' | 'auth_rate_limited';
+  pageId: string;
+  authType: 'password' | 'url_token' | 'basic';
+  subdomain?: string;
+}): void {
+  if (!client) return;
+
+  try {
+    client.capture({
+      distinctId: `page:${params.pageId}`,
+      event: params.event,
+      properties: {
+        app: 'zenbin',
+        page_id: params.pageId,
+        auth_type: params.authType,
+        subdomain: params.subdomain || null,
+      },
+    });
+  } catch (error) {
+    console.error('PostHog trackAuthEvent error:', error);
+  }
+}
+
+/**
+ * Track server errors
+ */
+export function trackError(params: {
+  error: string;
+  stack?: string;
+  endpoint?: string;
+  method?: string;
+  statusCode?: number;
+}): void {
+  if (!client) return;
+
+  try {
+    client.capture({
+      distinctId: 'system',
+      event: 'server_error',
+      properties: {
+        app: 'zenbin',
+        error: params.error,
+        stack: params.stack || null,
+        endpoint: params.endpoint || null,
+        method: params.method || null,
+        status_code: params.statusCode || null,
+      },
+    });
+  } catch (error) {
+    console.error('PostHog trackError error:', error);
   }
 }
 
@@ -136,4 +284,78 @@ function hashIp(ip: string): string {
  */
 function hashApiKey(keyId: string): string {
   return createHash('sha256').update(keyId).digest('hex').substring(0, 16);
+}
+
+/**
+ * Track shard distribution
+ */
+export function trackShardDistribution(distribution: Map<string, number>): void {
+  if (!client) return;
+
+  try {
+    const total = Array.from(distribution.values()).reduce((a, b) => a + b, 0);
+    const shards = Array.from(distribution.entries()).map(([shard, count]) => ({
+      shard,
+      count,
+      percentage: total > 0 ? Math.round((count / total) * 100) : 0,
+    }));
+
+    client.capture({
+      distinctId: 'system',
+      event: 'shard_distribution',
+      properties: {
+        app: 'zenbin',
+        total_pages: total,
+        shard_count: distribution.size,
+        shards,
+      },
+    });
+  } catch (error) {
+    console.error('PostHog trackShardDistribution error:', error);
+  }
+}
+
+/**
+ * Track content hash (for deduplication metrics)
+ */
+export function trackContentHash(params: {
+  contentHash: string;
+  isDuplicate: boolean;
+  shard: string;
+  size: number;
+}): void {
+  if (!client) return;
+
+  try {
+    client.capture({
+      distinctId: 'system',
+      event: 'content_hash_created',
+      properties: {
+        app: 'zenbin',
+        content_hash_prefix: params.contentHash.slice(0, 8),
+        is_duplicate: params.isDuplicate,
+        shard: params.shard,
+        content_size_bytes: params.size,
+      },
+    });
+  } catch (error) {
+    console.error('PostHog trackContentHash error:', error);
+  }
+}
+
+/**
+ * Generic capture function
+ */
+export function capture(params: {
+  distinctId: string;
+  event: string;
+  properties: Record<string, unknown>;
+}): void {
+  if (!client) return;
+
+  try {
+    client.capture(params);
+  } catch (error) {
+    console.error('PostHog capture error:', error);
+  }
 }

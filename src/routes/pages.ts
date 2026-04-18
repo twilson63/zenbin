@@ -5,7 +5,7 @@ import { generateEtag } from '../utils/etag.js';
 import { validateId, validatePageBody, decodeHtml, decodeMarkdown, validateAuthInput } from '../utils/validation.js';
 import { hashPassword, generateUrlToken, verifyPassword, parseBasicAuth } from '../utils/auth.js';
 import { validateSubdomainName } from './subdomains.js';
-import { trackApiCall, trackPageCreated } from '../analytics/posthog.js';
+import { trackApiCall, trackPageCreated, trackPageUpdated, trackPageDeleted } from '../analytics/posthog.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
 import { deletePage as deletePageFromDb } from '../storage/db.js';
 import { saveVideo, deleteVideo } from '../storage/video.js';
@@ -259,7 +259,8 @@ pages.post('/:id', async (c) => {
     }
   }
 
-  // Track page creation
+  // Track page creation or update
+  const contentSize = (decodedHtml?.length || 0) + (decodedMarkdown?.length || 0) + (imageData?.length || 0);
   if (created) {
     trackPageCreated({
       pageId: page.id,
@@ -268,6 +269,16 @@ pages.post('/:id', async (c) => {
       hasMarkdown: !!page.markdown,
       hasImage: !!page.image,
       hasVideo: !!page.video,
+      subdomain,
+      contentSize,
+    });
+  } else {
+    trackPageUpdated({
+      pageId: page.id,
+      hasAuth: !!authData,
+      contentType: page.content_type || 'text/html',
+      subdomain,
+      contentSize,
     });
   }
 
@@ -333,6 +344,22 @@ pages.delete('/:id', async (c) => {
   if (subdomain) {
     decrementSubdomainPageCount(subdomain);
   }
+
+  // Track page deletion
+  trackPageDeleted({
+    pageId: id,
+    subdomain,
+    hadAuth: !!page.auth,
+    contentType: page.content_type || 'text/html',
+  });
+
+  // Track API call
+  trackApiCall({
+    endpoint: '/v1/pages/:id',
+    method: 'DELETE',
+    pageId: id,
+    statusCode: 204,
+  });
 
   return c.body(null, 204);
 });

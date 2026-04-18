@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { config } from '../config.js';
 import { saveSubdomain, getSubdomain, deleteSubdomain, listPagesBySubdomain } from '../storage/db.js';
 import { validateId } from '../utils/validation.js';
+import { trackSubdomainEvent, trackApiCall } from '../analytics/posthog.js';
 
 const subdomains = new Hono();
 
@@ -52,7 +53,18 @@ subdomains.post('/:name', async (c) => {
   
   // Claim the subdomain
   const { subdomain, created } = await saveSubdomain(name);
-  
+
+  // Track subdomain creation
+  if (created) {
+    trackSubdomainEvent('subdomain_created', name);
+  }
+
+  trackApiCall({
+    endpoint: '/v1/subdomains/:name',
+    method: 'POST',
+    statusCode: created ? 201 : 200,
+  });
+
   const baseUrl = config.baseUrl.replace(/^https?:\/\//, '');
   const protocol = config.baseUrl.startsWith('https') ? 'https' : 'http';
   
@@ -114,13 +126,28 @@ subdomains.get('/:name/pages', (c) => {
 // DELETE /v1/subdomains/:name - Delete a subdomain and all its pages
 subdomains.delete('/:name', async (c) => {
   const name = c.req.param('name').toLowerCase();
-  
-  const deleted = await deleteSubdomain(name);
-  
-  if (!deleted) {
+
+  const existing = getSubdomain(name);
+  if (!existing) {
     return c.json({ error: `Subdomain '${name}' not found` }, 404);
   }
-  
+
+  const pageCount = existing.page_count;
+  const deleted = await deleteSubdomain(name);
+
+  if (!deleted) {
+    return c.json({ error: `Failed to delete subdomain '${name}'` }, 500);
+  }
+
+  // Track subdomain deletion
+  trackSubdomainEvent('subdomain_deleted', name, { pageCount });
+
+  trackApiCall({
+    endpoint: '/v1/subdomains/:name',
+    method: 'DELETE',
+    statusCode: 204,
+  });
+
   return c.body(null, 204);
 });
 
