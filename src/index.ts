@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import dotenv from 'dotenv';
 import { config } from './config.js';
 import { initDatabase, closeDatabase } from './storage/db.js';
 import { initVideoStorage } from './storage/video.js';
@@ -149,6 +150,13 @@ app.onError((err, c) => {
 
 // Initialize database and start server
 async function main() {
+  // Load environment variables FIRST (ESM requires explicit path)
+  const path = await import('path');
+  const { fileURLToPath } = await import('url');
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  dotenv.config({ path: path.resolve(__dirname, '../.env') });
+  
   try {
     console.log('Initializing database...');
     initDatabase();
