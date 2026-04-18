@@ -16,7 +16,7 @@ import { rateLimit } from './middleware/rateLimit.js';
 import { proxyRateLimit } from './middleware/proxyRateLimit.js';
 import { proxy } from './routes/proxy.js';
 import { verifyApiKey } from './middleware/verifyApiKey.js';
-import { initAnalytics, closeAnalytics } from './analytics/posthog.js';
+import { initAnalytics, closeAnalytics, trackError } from './analytics/posthog.js';
 import { serveLandingPage } from './routes/landing.js';
 import { serveSubdomainPage } from './routes/subdomainRender.js';
 
@@ -145,6 +145,19 @@ app.notFound((c) => {
 // Error handler
 app.onError((err, c) => {
   console.error('Unhandled error:', err);
+  
+  const endpoint = c.req.path;
+  const method = c.req.method;
+  const statusCode = 500;
+  
+  trackError({
+    error: err.message || String(err),
+    stack: err.stack,
+    endpoint,
+    method,
+    statusCode,
+  });
+  
   return c.json({ error: 'Internal server error' }, 500);
 });
 
