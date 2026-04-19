@@ -198,10 +198,31 @@ render.get('/:id', async (c) => {
     ip: c.req.header('X-Forwarded-For') || c.req.header('X-Real-IP'),
   });
 
-  // Inject PostHog tracking for HTML pages
-  const html = shouldInjectPostHog(page.content_type || 'text/html') 
-    ? injectPostHog(page.html) 
-    : page.html;
+  /**
+ * Inject a subtle "Powered by hyper.io" footer into HTML pages
+ */
+function injectFooter(html: string): string {
+  const footer = `
+<style>
+.zenbin-footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 8px 16px; background: rgba(0,0,0,0.85); font-family: system-ui, -apple-system, sans-serif; font-size: 11px; color: #888; text-align: center; z-index: 9999; }
+.zenbin-footer a { color: #10b981; text-decoration: none; }
+.zenbin-footer a:hover { text-decoration: underline; }
+</style>
+<div class="zenbin-footer">
+  powered by <a href="https://hyper.io" target="_blank">hyper.io</a>
+</div>`;
+  
+  // Inject before </body> or append to end
+  if (html.includes('</body>')) {
+    return html.replace('</body>', `${footer}</body>`);
+  }
+  return html + footer;
+}
+
+// Inject PostHog tracking for HTML pages
+  const html = shouldInjectPostHog(page.content_type || 'text/html')
+    ? injectFooter(injectPostHog(page.html))
+    : injectFooter(page.html);
 
   return c.body(html);
 });

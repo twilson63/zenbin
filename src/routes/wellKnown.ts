@@ -234,7 +234,7 @@ www, api, mail, admin, blog, docs, help, support, status, billing, account, acco
 ## Support
 
 - Website: ${baseUrl}
-- Powered by: OnHyper.io
+- Powered by: hyper.io
 `;
 };
 

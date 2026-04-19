@@ -985,7 +985,7 @@ const getHtml = () => `<!DOCTYPE html>
       </div>
     </div>
 
-    <span class="powered-by">powered by onhyper</span>
+    <span class="powered-by">powered by <a href="https://hyper.io" target="_blank" style="color: var(--accent); text-decoration: none;">hyper.io</a></span>
   </section>
 
   <!-- How It Works -->
@@ -1167,7 +1167,7 @@ const getHtml = () => `<!DOCTYPE html>
         <a href="#features">features</a>
         <a href="#use-cases">use_cases</a>
         <a href="#api">api</a>
-        <a href="https://onhyper.io/pricing" target="_blank">pricing</a>
+        <a href="https://hyper.io/pricing" target="_blank">pricing</a>
       </div>
       <div class="footer-col">
         <span class="footer-col-title">// resources</span>
@@ -1176,19 +1176,19 @@ const getHtml = () => `<!DOCTYPE html>
         <span>changelog</span>
       </div>
       <div class="footer-col">
-        <span class="footer-col-title">// onhyper</span>
-        <a href="https://onhyper.io" target="_blank">platform</a>
-        <a href="https://onhyper.io/pricing" target="_blank">pricing</a>
-        <a href="https://docs.onhyper.io" target="_blank">documentation</a>
+        <span class="footer-col-title">// hyper.io</span>
+        <a href="https://hyper.io" target="_blank">platform</a>
+        <a href="https://hyper.io/pricing" target="_blank">pricing</a>
+        <a href="https://docs.hyper.io" target="_blank">documentation</a>
       </div>
     </div>
 
     <div class="footer-divider"></div>
 
     <div class="footer-bottom">
-      <span class="footer-copyright">&copy; 2026 zenbin. powered by onhyper. mit license.</span>
+      <span class="footer-copyright">&copy; 2026 zenbin. powered by <a href="https://hyper.io" target="_blank" style="color: var(--text-secondary); text-decoration: none;">hyper.io</a>. mit license.</span>
       <div class="footer-social">
-        <a href="https://x.com/onhyper" target="_blank">x/twitter</a>
+        <a href="https://x.com/hyper_io" target="_blank">x/twitter</a>
         <a href="https://github.com/twilson63/zenbin" target="_blank">github</a>
       </div>
     </div>
