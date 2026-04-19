@@ -11,6 +11,7 @@ import { pages } from './routes/pages.js';
 import { render } from './routes/render.js';
 import { auth } from './routes/auth.js';
 import { keys } from './routes/keys.js';
+import { migrate } from './routes/migrate.js';
 import { agent } from './routes/agent.js';
 import { stats } from './routes/stats.js';
 import { wellKnown } from './routes/wellKnown.js';
@@ -101,8 +102,9 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// API routes (auth doesn't require API key)
+// API routes (auth/migrate don't require API key)
 app.route('/v1', auth);
+app.route('/v1/migrate', migrate);
 
 // Protected API routes (require API key)
 app.route('/v1/keys', keys);
