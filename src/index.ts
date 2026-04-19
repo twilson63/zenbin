@@ -6,8 +6,10 @@ import dotenv from 'dotenv';
 import { config } from './config.js';
 import { initDatabase, closeDatabase } from './storage/db.js';
 import { initVideoStorage } from './storage/video.js';
+import { initAdminDatabase, closeAdminDatabase } from './storage/admin.js';
 import { pages } from './routes/pages.js';
 import { render } from './routes/render.js';
+import { auth } from './routes/auth.js';
 import { agent } from './routes/agent.js';
 import { stats } from './routes/stats.js';
 import { wellKnown } from './routes/wellKnown.js';
@@ -96,6 +98,7 @@ app.get('/health', (c) => {
 });
 
 // API routes
+app.route('/v1', auth);
 app.route('/v1/pages', pages);
 app.route('/v1/subdomains', subdomains);
 app.route('/v1/stats', stats);
@@ -175,6 +178,14 @@ async function main() {
     initDatabase();
     console.log(`Database initialized at ${config.lmdbPath}`);
 
+    console.log('Initializing admin database...');
+    initAdminDatabase();
+    console.log('Admin database initialized');
+
+    console.log('Initializing admin database...');
+    initAdminDatabase();
+    console.log('Admin database initialized');
+
     console.log('Initializing video storage...');
     initVideoStorage();
     console.log(`Video storage initialized at ${config.videoStoragePath}`);
@@ -242,6 +253,7 @@ API Key Configuration:
     const shutdown = async (signal: string) => {
       console.log(`\nReceived ${signal}. Shutting down gracefully...`);
       await closeAnalytics();
+      closeAdminDatabase();
       await closeDatabase();
       process.exit(0);
     };

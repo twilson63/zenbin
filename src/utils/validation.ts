@@ -10,6 +10,20 @@ export interface PageAuthInput {
   urlToken?: boolean;
 }
 
+// Validate email format
+export function validateEmail(email: string): ValidationError | null {
+  if (!email || typeof email !== 'string') {
+    return { field: 'email', message: 'Email is required' };
+  }
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return { field: 'email', message: 'Invalid email format' };
+  }
+  
+  return null;
+}
+
 /**
  * Validate a page ID
  */
