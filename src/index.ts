@@ -10,6 +10,7 @@ import { initAdminDatabase, closeAdminDatabase } from './storage/admin.js';
 import { pages } from './routes/pages.js';
 import { render } from './routes/render.js';
 import { auth } from './routes/auth.js';
+import { keys } from './routes/keys.js';
 import { agent } from './routes/agent.js';
 import { stats } from './routes/stats.js';
 import { wellKnown } from './routes/wellKnown.js';
@@ -52,8 +53,11 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-// API Key verification (must be after rateLimit to avoid abuse)
-app.use('/v1/*', verifyApiKey);
+// API Key verification (skip for registration/verification routes)
+app.use('/v1/pages/*', verifyApiKey);
+app.use('/v1/subdomains/*', verifyApiKey);
+app.use('/v1/stats/*', verifyApiKey);
+app.use('/v1/keys/*', verifyApiKey);
 app.use('/api/proxy/*', verifyApiKey);
 
 // Well-known endpoints (for agent discoverability)
@@ -97,8 +101,11 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// API routes
+// API routes (auth doesn't require API key)
 app.route('/v1', auth);
+
+// Protected API routes (require API key)
+app.route('/v1/keys', keys);
 app.route('/v1/pages', pages);
 app.route('/v1/subdomains', subdomains);
 app.route('/v1/stats', stats);

@@ -196,8 +196,6 @@ auth.get('/verify/:token', async (c) => {
   // Mark user as verified
   updateUser(result.user_id, {
     email_verified: 1,
-    verification_token: null,
-    verification_expires: null,
   });
 
   // Generate API key
