@@ -19,6 +19,7 @@ import { verifyApiKey } from './middleware/verifyApiKey.js';
 import { initAnalytics, closeAnalytics, trackError } from './analytics/posthog.js';
 import { serveLandingPage } from './routes/landing.js';
 import { serveSubdomainPage } from './routes/subdomainRender.js';
+import { adminKeys } from './routes/adminKeys.js';
 
 // Type for context variables
 type Variables = {
@@ -99,6 +100,7 @@ app.get('/health', (c) => {
 app.route('/v1/pages', pages);
 app.route('/v1/subdomains', subdomains);
 app.route('/v1/stats', stats);
+app.route('/v1/admin/keys', adminKeys);
 
 // Agent instructions
 app.route('/api/agent', agent);
@@ -208,11 +210,13 @@ Endpoints:
   GET  /robots.txt              - Robots.txt for crawlers
   GET  /.well-known/skill.md    - Agent instructions
   GET  /v1/stats                - Site statistics
+  GET  /v1/admin/keys           - List signing keys (admin)
+  POST /v1/admin/keys          - Register signing key (admin)
   POST /v1/subdomains/{name}    - Claim a subdomain
   GET  /v1/subdomains/{name}    - Get subdomain info
   GET  /v1/subdomains/{name}/pages - List subdomain pages
   DELETE /v1/subdomains/{name}  - Delete subdomain
-  POST /v1/pages/{id}           - Create or replace a page (use X-Subdomain header for subdomains)
+  POST /v1/pages/{id}           - Create or replace a page (signed)
   GET  /p/{id}                  - Render page in browser
   GET  /p/{id}/raw              - Fetch raw HTML
   GET  /p/{id}/md               - Fetch markdown source

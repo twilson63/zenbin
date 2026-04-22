@@ -3,13 +3,16 @@ import { initDatabase, closeDatabase } from '../storage/db.js';
 import { rmSync } from 'fs';
 
 const TEST_DB_PATH = './data/test.lmdb';
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
 
 beforeAll(() => {
   // Clean up any existing test database
-  try {
-    rmSync(TEST_DB_PATH, { recursive: true, force: true });
-  } catch {
-    // Ignore if doesn't exist
+  for (const suffix of TEST_DB_SUFFIXES) {
+    try {
+      rmSync(`${TEST_DB_PATH}${suffix}`, { recursive: true, force: true });
+    } catch {
+      // Ignore if doesn't exist
+    }
   }
   
   // Set test database path
@@ -23,9 +26,11 @@ afterAll(async () => {
   await closeDatabase();
   
   // Clean up test database
-  try {
-    rmSync(TEST_DB_PATH, { recursive: true, force: true });
-  } catch {
-    // Ignore cleanup errors
+  for (const suffix of TEST_DB_SUFFIXES) {
+    try {
+      rmSync(`${TEST_DB_PATH}${suffix}`, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
   }
 });

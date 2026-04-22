@@ -4,10 +4,14 @@ import { pages } from '../routes/pages.js';
 import { render } from '../routes/render.js';
 import { initDatabase, closeDatabase, getDatabase } from '../storage/db.js';
 import { resetAuthAttempts } from '../middleware/authRateLimit.js';
+import { rmSync } from 'fs';
+import { createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
 
 const app = new Hono();
 app.route('/v1/pages', pages);
 app.route('/p', render);
+const TEST_DB_PATH = './data/test-auth.lmdb';
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
 
 // Helper to create Basic Auth header
 function basicAuth(password: string, username: string = ''): string {
@@ -20,23 +24,44 @@ function uniqueId(prefix: string): string {
 }
 
 describe('Page Authentication', () => {
-  beforeAll(() => {
+  let signer: TestSigner;
+
+  beforeAll(async () => {
+    for (const suffix of TEST_DB_SUFFIXES) {
+      try {
+        rmSync(`${TEST_DB_PATH}${suffix}`, { recursive: true, force: true });
+      } catch {
+        // Ignore if doesn't exist
+      }
+    }
+    process.env.LMDB_PATH = TEST_DB_PATH;
     initDatabase();
+    signer = await createTestSigner(`auth-test-signer-${Date.now()}`);
   });
 
   afterAll(async () => {
     await closeDatabase();
+    for (const suffix of TEST_DB_SUFFIXES) {
+      try {
+        rmSync(`${TEST_DB_PATH}${suffix}`, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   });
 
   describe('Page Creation with Auth', () => {
     it('should create a page with password protection', async () => {
-      const id = uniqueId('pass');
-      const res = await app.request(`/v1/pages/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        const id = uniqueId('pass');
+        const res = await app.request(`/v1/pages/${id}`, {
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: `/v1/pages/${id}`,
+          body: {
           html: '<h1>Secret</h1>',
           auth: { password: 'testpassword123' }
+          },
         }),
       });
 
@@ -50,11 +75,14 @@ describe('Page Authentication', () => {
     it('should create a page with URL token', async () => {
       const id = uniqueId('token');
       const res = await app.request(`/v1/pages/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: `/v1/pages/${id}`,
+          body: {
           html: '<h1>Token Page</h1>',
           auth: { urlToken: true }
+          },
         }),
       });
 
@@ -69,11 +97,14 @@ describe('Page Authentication', () => {
     it('should create a page with both password and URL token', async () => {
       const id = uniqueId('both');
       const res = await app.request(`/v1/pages/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: `/v1/pages/${id}`,
+          body: {
           html: '<h1>Dual Auth</h1>',
           auth: { password: 'testpassword123', urlToken: true }
+          },
         }),
       });
 
@@ -85,11 +116,14 @@ describe('Page Authentication', () => {
     it('should reject password shorter than 8 characters', async () => {
       const id = uniqueId('short');
       const res = await app.request(`/v1/pages/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: `/v1/pages/${id}`,
+          body: {
           html: '<h1>Test</h1>',
           auth: { password: 'short' }
+          },
         }),
       });
 
@@ -101,11 +135,14 @@ describe('Page Authentication', () => {
     it('should reject empty auth object', async () => {
       const id = uniqueId('empty');
       const res = await app.request(`/v1/pages/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: `/v1/pages/${id}`,
+          body: {
           html: '<h1>Test</h1>',
           auth: {}
+          },
         }),
       });
 
@@ -115,10 +152,13 @@ describe('Page Authentication', () => {
     it('should create public page without auth', async () => {
       const id = uniqueId('public');
       const res = await app.request(`/v1/pages/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: `/v1/pages/${id}`,
+          body: {
           html: '<h1>Public</h1>'
+          },
         }),
       });
 
@@ -137,25 +177,31 @@ describe('Page Authentication', () => {
     beforeAll(async () => {
       // Create password-protected page
       passwordPageId = uniqueId('access-pass');
-      await app.request(`/v1/pages/${passwordPageId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        await app.request(`/v1/pages/${passwordPageId}`, {
+          ...jsonSignedRequest({
+            signer,
+            method: 'POST',
+            path: `/v1/pages/${passwordPageId}`,
+            body: {
           html: '<h1>Password Protected</h1>',
           auth: { password }
-        }),
-      });
+            },
+          }),
+        });
 
       // Create token-protected page
       tokenPageId = uniqueId('access-token');
-      const tokenRes = await app.request(`/v1/pages/${tokenPageId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        const tokenRes = await app.request(`/v1/pages/${tokenPageId}`, {
+          ...jsonSignedRequest({
+            signer,
+            method: 'POST',
+            path: `/v1/pages/${tokenPageId}`,
+            body: {
           html: '<h1>Token Protected</h1>',
           auth: { urlToken: true }
-        }),
-      });
+            },
+          }),
+        });
       const tokenData = await tokenRes.json();
       const url = new URL(tokenData.secret_url);
       urlToken = url.searchParams.get('token')!;
@@ -217,9 +263,12 @@ describe('Page Authentication', () => {
     it('should access public page without auth', async () => {
       const id = uniqueId('still-public');
       await app.request(`/v1/pages/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html: '<h1>Public</h1>' }),
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: `/v1/pages/${id}`,
+          body: { html: '<h1>Public</h1>' },
+        }),
       });
 
       const res = await app.request(`/p/${id}`);
@@ -234,11 +283,14 @@ describe('Page Authentication', () => {
 
       // Create page
       const createRes = await app.request(`/v1/pages/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: `/v1/pages/${id}`,
+          body: {
           html: '<h1>ETag Test</h1>',
           auth: { password }
+          },
         }),
       });
       const { etag } = await createRes.json();
@@ -265,11 +317,14 @@ describe('Page Authentication', () => {
     it('should lock out after too many failed attempts', async () => {
       const id = uniqueId('brute');
       await app.request(`/v1/pages/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: `/v1/pages/${id}`,
+          body: {
           html: '<h1>Brute Force Test</h1>',
           auth: { password: 'correctpassword' }
+          },
         }),
       });
 

@@ -101,9 +101,9 @@ export function trackPageCreated(params: {
   contentType: string;
   hasMarkdown: boolean;
   hasImage: boolean;
-  hasVideo: boolean;
+  hasVideo?: boolean;
   subdomain?: string;
-  contentSize: number;
+  contentSize?: number;
 }): void {
   if (!client) return;
 
@@ -118,9 +118,9 @@ export function trackPageCreated(params: {
         content_type: params.contentType,
         has_markdown: params.hasMarkdown,
         has_image: params.hasImage,
-        has_video: params.hasVideo,
+        has_video: params.hasVideo || false,
         subdomain: params.subdomain || null,
-        content_size_bytes: params.contentSize,
+        content_size_bytes: params.contentSize || null,
       },
     });
   } catch (error) {
@@ -136,7 +136,7 @@ export function trackPageUpdated(params: {
   hasAuth: boolean;
   contentType: string;
   subdomain?: string;
-  contentSize: number;
+  contentSize?: number;
 }): void {
   if (!client) return;
 
@@ -150,7 +150,7 @@ export function trackPageUpdated(params: {
         has_auth: params.hasAuth,
         content_type: params.contentType,
         subdomain: params.subdomain || null,
-        content_size_bytes: params.contentSize,
+        content_size_bytes: params.contentSize || null,
       },
     });
   } catch (error) {
@@ -194,7 +194,7 @@ export function trackSubdomainEvent(
   subdomain: string,
   metadata?: {
     pageCount?: number;
-  reason?: string;
+    reason?: string;
   }
 ): void {
   if (!client) return;

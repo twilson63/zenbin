@@ -4,8 +4,10 @@ import { pages } from '../routes/pages.js';
 import { render } from '../routes/render.js';
 import { initDatabase, closeDatabase } from '../storage/db.js';
 import { rmSync } from 'fs';
+import { createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
 
 const TEST_DB_PATH = './data/test-markdown.lmdb';
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
 
 const app = new Hono();
 app.route('/v1/pages', pages);
@@ -13,13 +15,17 @@ app.route('/p', render);
 
 let testId: number;
 const uniqueId = (base: string) => `${base}-${testId++}`;
+let signer: TestSigner;
 
-beforeAll(() => {
-  try {
-    rmSync(TEST_DB_PATH, { recursive: true, force: true });
-  } catch { /* ignore */ }
+beforeAll(async () => {
+  for (const suffix of TEST_DB_SUFFIXES) {
+    try {
+      rmSync(`${TEST_DB_PATH}${suffix}`, { recursive: true, force: true });
+    } catch { /* ignore */ }
+  }
   process.env.LMDB_PATH = TEST_DB_PATH;
   initDatabase();
+  signer = await createTestSigner(`markdown-test-signer-${Date.now()}`);
 });
 
 beforeEach(() => {
@@ -28,20 +34,25 @@ beforeEach(() => {
 
 afterAll(async () => {
   await closeDatabase();
-  try {
-    rmSync(TEST_DB_PATH, { recursive: true, force: true });
-  } catch { /* ignore */ }
+  for (const suffix of TEST_DB_SUFFIXES) {
+    try {
+      rmSync(`${TEST_DB_PATH}${suffix}`, { recursive: true, force: true });
+    } catch { /* ignore */ }
+  }
 });
 
 describe('POST /v1/pages/:id with markdown', () => {
   it('should create a page with markdown (utf-8)', async () => {
     const pageId = uniqueId('md-page');
     const res = await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html><body>HTML content</body></html>',
         markdown: '# Hello\n\nThis is markdown.',
+        },
       }),
     });
 
@@ -57,12 +68,15 @@ describe('POST /v1/pages/:id with markdown', () => {
     const base64Markdown = Buffer.from(markdown).toString('base64');
 
     const res = await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html><body>Content</body></html>',
         markdown: base64Markdown,
         markdown_encoding: 'base64',
+        },
       }),
     });
 
@@ -76,10 +90,13 @@ describe('POST /v1/pages/:id with markdown', () => {
   it('should create a page with markdown only (no HTML)', async () => {
     const pageId = uniqueId('md-only');
     const res = await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         markdown: '# Markdown Only\n\nNo HTML here.',
+        },
       }),
     });
 
@@ -93,11 +110,14 @@ describe('POST /v1/pages/:id with markdown', () => {
   it('should include markdown_url in response when markdown is provided', async () => {
     const pageId = uniqueId('md-url');
     const res = await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html></html>',
         markdown: '# Test',
+        },
       }),
     });
 
@@ -109,10 +129,13 @@ describe('POST /v1/pages/:id with markdown', () => {
   it('should not include markdown_url when no markdown is provided', async () => {
     const pageId = uniqueId('no-md');
     const res = await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html></html>',
+        },
       }),
     });
 
@@ -123,10 +146,13 @@ describe('POST /v1/pages/:id with markdown', () => {
   it('should reject when neither html nor markdown is provided', async () => {
     const pageId = uniqueId('empty');
     const res = await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         title: 'No content',
+        },
       }),
     });
 
@@ -138,11 +164,14 @@ describe('GET /p/:id/md', () => {
   it('should return markdown with correct content type', async () => {
     const pageId = uniqueId('md-get');
     await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html></html>',
         markdown: '# Title\n\nContent',
+        },
       }),
     });
 
@@ -158,10 +187,13 @@ describe('GET /p/:id/md', () => {
   it('should return 404 when page has no markdown', async () => {
     const pageId = uniqueId('no-md-page');
     await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html></html>',
+        },
       }),
     });
 
@@ -177,11 +209,14 @@ describe('GET /p/:id/md', () => {
   it('should support ETag caching', async () => {
     const pageId = uniqueId('md-etag');
     await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html></html>',
         markdown: '# ETag test',
+        },
       }),
     });
 
@@ -200,11 +235,14 @@ describe('GET /p/:id with Accept: text/markdown', () => {
   it('should return markdown when Accept header requests it', async () => {
     const pageId = uniqueId('accept-md');
     await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html><body>HTML</body></html>',
         markdown: '# Markdown Version',
+        },
       }),
     });
 
@@ -222,11 +260,14 @@ describe('GET /p/:id with Accept: text/markdown', () => {
   it('should return HTML without Accept header', async () => {
     const pageId = uniqueId('no-accept');
     await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html><body>HTML</body></html>',
         markdown: '# Markdown',
+        },
       }),
     });
 
@@ -241,10 +282,13 @@ describe('GET /p/:id with Accept: text/markdown', () => {
   it('should return markdown when page has no HTML but has markdown', async () => {
     const pageId = uniqueId('md-only-page');
     await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         markdown: '# Markdown Only Page',
+        },
       }),
     });
 
@@ -261,12 +305,15 @@ describe('Auth for markdown endpoint', () => {
   it('should require auth for protected page markdown', async () => {
     const pageId = uniqueId('auth-md');
     await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html></html>',
         markdown: '# Secret Markdown',
         auth: { password: 'secret123' },
+        },
       }),
     });
 
@@ -277,12 +324,15 @@ describe('Auth for markdown endpoint', () => {
   it('should return markdown with valid auth', async () => {
     const pageId = uniqueId('auth-md-valid');
     await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html></html>',
         markdown: '# Protected Content',
         auth: { password: 'mypassword' },
+        },
       }),
     });
 
@@ -299,12 +349,15 @@ describe('Auth for markdown endpoint', () => {
   it('should work with URL token for markdown', async () => {
     const pageId = uniqueId('token-md');
     const createRes = await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
         html: '<html></html>',
         markdown: '# Token Protected',
         auth: { urlToken: true },
+        },
       }),
     });
 

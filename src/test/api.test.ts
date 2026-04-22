@@ -4,24 +4,35 @@ import { pages } from '../routes/pages.js';
 import { render } from '../routes/render.js';
 import { initDatabase, closeDatabase } from '../storage/db.js';
 import { rmSync } from 'fs';
+import { createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
+import { adminKeys } from '../routes/adminKeys.js';
+import { config } from '../config.js';
 
 const TEST_DB_PATH = './data/test-api.lmdb';
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
 
 // Create test app
 const app = new Hono();
 app.route('/v1/pages', pages);
 app.route('/p', render);
+app.route('/v1/admin/keys', adminKeys);
 
 // Generate unique IDs for each test run
 let testId: number;
 const uniqueId = (base: string) => `${base}-${testId++}`;
+let signer: TestSigner;
+let otherSigner: TestSigner;
 
-beforeAll(() => {
-  try {
-    rmSync(TEST_DB_PATH, { recursive: true, force: true });
-  } catch { /* ignore */ }
+beforeAll(async () => {
+  for (const suffix of TEST_DB_SUFFIXES) {
+    try {
+      rmSync(`${TEST_DB_PATH}${suffix}`, { recursive: true, force: true });
+    } catch { /* ignore */ }
+  }
   process.env.LMDB_PATH = TEST_DB_PATH;
   initDatabase();
+  signer = await createTestSigner(`api-test-signer-${Date.now()}`);
+  otherSigner = await createTestSigner(`api-test-signer-other-${Date.now()}`);
 });
 
 beforeEach(() => {
@@ -30,20 +41,25 @@ beforeEach(() => {
 
 afterAll(async () => {
   await closeDatabase();
-  try {
-    rmSync(TEST_DB_PATH, { recursive: true, force: true });
-  } catch { /* ignore */ }
+  for (const suffix of TEST_DB_SUFFIXES) {
+    try {
+      rmSync(`${TEST_DB_PATH}${suffix}`, { recursive: true, force: true });
+    } catch { /* ignore */ }
+  }
 });
 
 describe('POST /v1/pages/:id', () => {
   it('should create a new page', async () => {
     const pageId = uniqueId('test-page');
     const res = await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        html: '<!doctype html><html><body>Hello World</body></html>',
-        title: 'Test Page',
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
+          html: '<!doctype html><html><body>Hello World</body></html>',
+          title: 'Test Page',
+        },
       }),
     });
 
@@ -55,30 +71,34 @@ describe('POST /v1/pages/:id', () => {
     expect(data.etag).toBeDefined();
   });
 
-  it('should reject duplicate page IDs', async () => {
+  it('should allow the same signing key to update an existing page', async () => {
     const pageId = uniqueId('duplicate-page');
     
     // First create the page
     await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        html: '<!doctype html><html><body>Original</body></html>',
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
+          html: '<!doctype html><html><body>Original</body></html>',
+        },
       }),
     });
 
     // Try to create again with same ID
     const res = await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        html: '<!doctype html><html><body>Duplicate</body></html>',
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
+          html: '<!doctype html><html><body>Duplicate</body></html>',
+        },
       }),
     });
 
-    expect(res.status).toBe(409);
-    const data = await res.json() as { error: string };
-    expect(data.error).toContain('already taken');
+    expect(res.status).toBe(200);
   });
 
   it('should accept base64 encoded content', async () => {
@@ -87,23 +107,113 @@ describe('POST /v1/pages/:id', () => {
     const base64Html = Buffer.from(html).toString('base64');
 
     const res = await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        encoding: 'base64',
-        html: base64Html,
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
+          encoding: 'base64',
+          html: base64Html,
+        },
       }),
     });
 
     expect(res.status).toBe(201);
   });
 
+  it('should create a video-only page and serve it from /p/:id', async () => {
+    const pageId = uniqueId('video-page');
+    const videoBase64 = Buffer.from('fake-video-bytes').toString('base64');
+
+    const publishRes = await app.request(`/v1/pages/${pageId}`, jsonSignedRequest({
+      signer,
+      method: 'POST',
+      path: `/v1/pages/${pageId}`,
+      body: {
+        video: videoBase64,
+        content_type: 'video/mp4',
+      },
+    }));
+
+    expect(publishRes.status).toBe(201);
+
+    const readRes = await app.request(`/p/${pageId}`);
+    expect(readRes.status).toBe(200);
+    expect(readRes.headers.get('content-type')).toContain('video/mp4');
+    expect(await readRes.text()).toBe('fake-video-bytes');
+  });
+
+  it('should expose /p/:id/video for pages with html and video', async () => {
+    const pageId = uniqueId('video-endpoint');
+    const videoBase64 = Buffer.from('sidecar-video').toString('base64');
+
+    const publishRes = await app.request(`/v1/pages/${pageId}`, jsonSignedRequest({
+      signer,
+      method: 'POST',
+      path: `/v1/pages/${pageId}`,
+      body: {
+        html: '<h1>Video Page</h1>',
+        video: videoBase64,
+        content_type: 'video/mp4',
+      },
+    }));
+
+    expect(publishRes.status).toBe(201);
+
+    const htmlRes = await app.request(`/p/${pageId}`);
+    expect(htmlRes.status).toBe(200);
+    expect(htmlRes.headers.get('content-type')).toContain('text/html');
+
+    const videoRes = await app.request(`/p/${pageId}/video`);
+    expect(videoRes.status).toBe(200);
+    expect(videoRes.headers.get('content-type')).toContain('video/mp4');
+    expect(await videoRes.text()).toBe('sidecar-video');
+  });
+
+  it('should support both image and video on the same page', async () => {
+    const pageId = uniqueId('dual-binary-page');
+    const imageBase64 = Buffer.from('image-bytes').toString('base64');
+    const videoBase64 = Buffer.from('video-bytes').toString('base64');
+
+    const publishRes = await app.request(`/v1/pages/${pageId}`, jsonSignedRequest({
+      signer,
+      method: 'POST',
+      path: `/v1/pages/${pageId}`,
+      body: {
+        html: '<h1>Media Page</h1>',
+        image: imageBase64,
+        image_content_type: 'image/png',
+        video: videoBase64,
+        video_content_type: 'video/mp4',
+        title: 'Media Page',
+      },
+    }));
+
+    expect(publishRes.status).toBe(201);
+    const payload = await publishRes.json() as { image_url: string; video_url: string };
+    expect(payload.image_url).toContain(`/p/${pageId}/image`);
+    expect(payload.video_url).toContain(`/p/${pageId}/video`);
+
+    const imageRes = await app.request(`/p/${pageId}/image`);
+    expect(imageRes.status).toBe(200);
+    expect(imageRes.headers.get('content-type')).toContain('image/png');
+    expect(await imageRes.text()).toBe('image-bytes');
+
+    const videoRes = await app.request(`/p/${pageId}/video`);
+    expect(videoRes.status).toBe(200);
+    expect(videoRes.headers.get('content-type')).toContain('video/mp4');
+    expect(await videoRes.text()).toBe('video-bytes');
+  });
+
   it('should reject invalid page IDs', async () => {
     const res = await app.request('/v1/pages/invalid/id', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        html: '<html></html>',
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: '/v1/pages/invalid/id',
+        body: {
+          html: '<html></html>',
+        },
       }),
     });
 
@@ -113,10 +223,13 @@ describe('POST /v1/pages/:id', () => {
 
   it('should reject invalid ID characters', async () => {
     const res = await app.request('/v1/pages/bad@id!', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        html: '<html></html>',
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: '/v1/pages/bad@id!',
+        body: {
+          html: '<html></html>',
+        },
       }),
     });
 
@@ -125,14 +238,98 @@ describe('POST /v1/pages/:id', () => {
 
   it('should reject missing html field', async () => {
     const res = await app.request('/v1/pages/no-html', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: 'No HTML',
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: '/v1/pages/no-html',
+        body: {
+          title: 'No HTML',
+        },
       }),
     });
 
     expect(res.status).toBe(400);
+  });
+
+  it('should reject updates from a different signing key', async () => {
+    const pageId = uniqueId('owner-only-page');
+
+    await app.request(`/v1/pages/${pageId}`, jsonSignedRequest({
+      signer,
+      method: 'POST',
+      path: `/v1/pages/${pageId}`,
+      body: { html: '<h1>Owner</h1>' },
+    }));
+
+    const res = await app.request(`/v1/pages/${pageId}`, jsonSignedRequest({
+      signer: otherSigner,
+      method: 'POST',
+      path: `/v1/pages/${pageId}`,
+      body: { html: '<h1>Intruder</h1>' },
+    }));
+
+    expect(res.status).toBe(403);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain('does not own');
+  });
+
+  it('should reject replayed nonces', async () => {
+    const pageId = uniqueId('replay-page');
+    const timestamp = new Date().toISOString();
+    const nonce = `replaynonce-${Date.now()}`;
+    const body = { html: '<h1>Replay Test</h1>' };
+
+    const firstRes = await app.request(`/v1/pages/${pageId}`, jsonSignedRequest({
+      signer,
+      method: 'POST',
+      path: `/v1/pages/${pageId}`,
+      body,
+      timestamp,
+      nonce,
+    }));
+    expect(firstRes.status).toBe(201);
+
+    const secondPageId = uniqueId('replay-page');
+    const secondRes = await app.request(`/v1/pages/${secondPageId}`, jsonSignedRequest({
+      signer,
+      method: 'POST',
+      path: `/v1/pages/${secondPageId}`,
+      body,
+      timestamp,
+      nonce,
+    }));
+
+    expect(secondRes.status).toBe(401);
+    const data = await secondRes.json() as { error: string };
+    expect(data.error).toContain('already been used');
+  });
+});
+
+describe('Admin key controls', () => {
+  it('should block a key and reject future writes', async () => {
+    const blockedSigner = await createTestSigner(`blocked-signer-${Date.now()}`);
+    const blockRes = await app.request(`/v1/admin/keys/${blockedSigner.keyId}/block`, {
+      method: 'POST',
+      headers: {
+        'X-Admin-Token': config.admin.token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ reason: 'abuse-test' }),
+    });
+
+    expect(blockRes.status).toBe(200);
+
+    const pageId = uniqueId('blocked-key-page');
+    const publishRes = await app.request(`/v1/pages/${pageId}`, jsonSignedRequest({
+      signer: blockedSigner,
+      method: 'POST',
+      path: `/v1/pages/${pageId}`,
+      body: { html: '<h1>Blocked</h1>' },
+    }));
+
+    expect(publishRes.status).toBe(403);
+    const data = await publishRes.json() as { error: string };
+    expect(data.error).toContain('blocked');
   });
 });
 
@@ -142,10 +339,13 @@ describe('GET /p/:id', () => {
     
     // First create a page
     await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        html: '<!doctype html><html><body>Render Test</body></html>',
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
+          html: '<!doctype html><html><body>Render Test</body></html>',
+        },
       }),
     });
 
@@ -171,10 +371,13 @@ describe('GET /p/:id', () => {
     
     // Create a page
     const createRes = await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        html: '<!doctype html><html><body>ETag Test</body></html>',
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
+          html: '<!doctype html><html><body>ETag Test</body></html>',
+        },
       }),
     });
     
@@ -196,10 +399,13 @@ describe('GET /p/:id/raw', () => {
     
     // Create a page
     await app.request(`/v1/pages/${pageId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        html: '<!doctype html><html><body>Raw Test</body></html>',
+      ...jsonSignedRequest({
+        signer,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
+          html: '<!doctype html><html><body>Raw Test</body></html>',
+        },
       }),
     });
 

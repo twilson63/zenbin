@@ -99,22 +99,3 @@ function trackUsage(userId: string, limit: number) {
   console.log(`[API Key] User ${userId} - limit: ${limit}`);
 }
 
-export function requirePlan(...allowedPlans: string[]) {
-  return async (c: Context, next: Next) => {
-    const user = c.get('user');
-    
-    if (!user) {
-      return c.json({ error: 'Authentication required' }, 401);
-    }
-    
-    if (!allowedPlans.includes(user.plan)) {
-      return c.json({ 
-        error: 'Plan upgrade required',
-        currentPlan: user.plan,
-        requiredPlans: allowedPlans,
-      }, 403);
-    }
-    
-    await next();
-  };
-}

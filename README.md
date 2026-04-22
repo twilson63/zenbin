@@ -1,26 +1,96 @@
 # ZenBin
 
-A headless HTML sandbox — publish and serve HTML documents via a simple API.
+ZenBin is a publishing API for agents.
 
-## Overview
+It gives AI agents a fast way to turn generated output into live web artifacts with stable URLs:
+- HTML pages
+- Markdown-backed docs
+- Images
+- Videos
+- multi-page subdomain sites
+- shareable reports, dashboards, demos, and handoff pages
 
-ZenBin is a lightweight web service that lets you publish HTML documents to unique IDs and view them at predictable URLs. It's optimized for fast sharing, demos, prototypes, and lightweight hosting of single-page HTML documents.
+## What ZenBin is for
+
+ZenBin is useful when an agent needs to:
+- publish a report for a human to open in a browser
+- ship a dashboard or microsite without a deployment pipeline
+- store HTML and Markdown together in one page
+- publish images or videos that need predictable public URLs
+- keep re-publishing updates to the same page over time
+- create a subdomain-based site and keep editing it later
+
+## Core model
+
+ZenBin is built around a few simple ideas:
+
+- **Agents write with signed requests** using Ed25519.
+- **The signing key that creates a page owns that page.**
+- **Re-publishing with the same key updates the page.**
+- **Subdomains are owned too.** If you keep the same keypair and the same `X-Subdomain` value, you can keep editing that site later.
+- **One publish can contain multiple content forms at once**: HTML, Markdown, image, and video.
 
 ## Features
 
-- **Simple API** — Store HTML by ID with a single POST request
-- **Markdown support** — Store markdown source alongside HTML, retrieve via `/md` endpoint or content negotiation
-- **Image support** — Upload images up to 5MB (PNG, JPEG, GIF, WebP, SVG)
-- **Instant rendering** — View pages at `/p/{id}` in any browser
-- **Raw access** — Fetch original HTML at `/p/{id}/raw`
-- **Markdown endpoint** — Fetch markdown source at `/p/{id}/md`
-- **Image endpoint** — Fetch images directly at `/p/{id}/image`
-- **Proxy endpoint** — Make external API calls from hosted pages (CORS bypass)
-- **Safe by default** — Sandboxed rendering with restrictive security headers
-- **ETag caching** — Efficient caching with `If-None-Match` support
-- **Rate limiting** — Built-in abuse protection
-- **Fast storage** — LMDB for high-performance reads/writes
-- **Page authentication** — Optional password protection or secret URL tokens
+- **Signed publishing** — Ed25519 request signing for agent-safe writes
+- **HTML + Markdown together** — Store rendered HTML and source Markdown in one publish
+- **Independent encoding controls** — `encoding` for HTML, `markdown_encoding` for Markdown
+- **Image support** — Upload images up to 5MB as base64 and serve them directly
+- **Video support** — Upload videos as base64 and serve them directly or from `/video`
+- **Subdomain sites** — Claim a subdomain and publish multi-page agent sites
+- **Stable update flow** — Re-publish with the same signing key to update pages
+- **Viewer auth options** — Optional password protection and secret URL tokens
+- **Predictable read endpoints** — `/p/{id}`, `/raw`, `/md`, `/image`, `/video`
+- **Proxy endpoint** — Let hosted pages call external APIs through ZenBin
+- **ETag caching** — Supports `If-None-Match`
+- **Fast storage** — LMDB-backed reads and writes
+
+## What ZenBin supports today
+
+### Publishable content
+
+A single page can contain any combination of:
+- `html`
+- `markdown`
+- `image`
+- `video`
+
+Examples of valid publishes:
+- HTML only
+- Markdown only
+- Image only
+- Video only
+- HTML + Markdown
+- HTML + Image
+- HTML + Video
+- Markdown + Image
+- Markdown + Video
+- HTML + Markdown + Image
+- HTML + Markdown + Video
+
+Binary asset rule:
+- a page can store both `image` and `video`
+- when both are present, use `image_content_type` and `video_content_type`
+- `content_type` remains the legacy fallback and the document content type for rendered HTML pages
+
+### Encoding
+
+- `encoding` applies to `html`
+- `markdown_encoding` applies to `markdown`
+- `image` is always a base64 string
+- `video` is always a base64 string
+
+This means you can send HTML and Markdown together and encode them independently in the same publish.
+
+### Video support
+
+ZenBin supports video in two ways:
+- **direct upload** with the `video` field plus a video `content_type`
+- **embedding inside HTML**, for example:
+  - `<video src="https://...">`
+  - YouTube embeds
+  - Vimeo embeds
+  - other HTTPS-hosted media players
 
 ## Quick Start
 
@@ -31,47 +101,99 @@ npm install
 # Run in development mode
 npm run dev
 
-# Or build and run in production
+# Build and run
 npm run build
 npm start
 ```
 
-The server starts at `http://localhost:3000` by default.
+Server default: `http://localhost:3000`
 
-## API Reference
+## Agent-first docs
 
-### Create or Replace a Page
+ZenBin exposes canonical agent docs at:
+- `GET /.well-known/skill.md`
+- `GET /api/agent`
+
+If you are integrating an agent, start with:
 
 ```bash
-POST /v1/pages/{id}
-Content-Type: application/json
+curl http://localhost:3000/.well-known/skill.md
 ```
 
-**Request body:**
+## API Overview
+
+## Claim a Subdomain
+
+```http
+POST /v1/subdomains/{name}
+```
+
+Signed request required.
+
+Rules:
+- 3–63 characters
+- starts with a letter
+- lowercase letters, numbers, and hyphens only
+- ends with a letter or number
+
+## Create or Update a Page
+
+```http
+POST /v1/pages/{id}
+Content-Type: application/json
+X-Zenbin-Key-Id: agent-key-123
+X-Zenbin-Timestamp: 2026-03-22T18:10:00Z
+X-Zenbin-Nonce: 8f0f6e3d4d2042e9
+Content-Digest: sha-256=:BASE64_DIGEST:
+X-Zenbin-Signature: :BASE64URL_SIGNATURE:
+```
+
+Optional:
+- `X-Subdomain: my-agent-site`
+- `Authorization: Basic ...` when updating/deleting a password-protected page
+
+### Request body
+
 ```json
 {
-  "html": "<!doctype html><html><body>Hello World</body></html>",
-  "markdown": "# Hello World\n\nThis is the markdown source.",
-  "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "encoding": "base64",
+  "markdown_encoding": "base64",
+  "html": "PCFET0NUWVBFIGh0bWw+PGh0bWw+PGJvZHk+PGgxPkhlbGxvPC9oMT48L2JvZHk+PC9odG1sPg==",
+  "markdown": "IyBIZWxsbwoKVGhpcyBpcyB0aGUgbWFya2Rvd24gc291cmNlLg==",
+  "image": "BASE64_IMAGE_BYTES",
+  "image_content_type": "image/png",
+  "video": "BASE64_VIDEO_BYTES",
+  "video_content_type": "video/mp4",
   "title": "My Page",
-  "encoding": "utf-8",
-  "markdown_encoding": "utf-8",
-  "content_type": "text/html; charset=utf-8"
+  "auth": {
+    "password": "strong-password-123",
+    "urlToken": true
+  }
 }
 ```
 
+### Field reference
+
 | Field | Required | Description |
 |-------|----------|-------------|
-| `html` | No* | HTML content (string). *At least one of `html`, `markdown`, or `image` is required. |
-| `markdown` | No* | Markdown source content (string). *At least one of `html`, `markdown`, or `image` is required. |
-| `image` | No* | Base64-encoded image data. *At least one of `html`, `markdown`, or `image` is required. |
-| `title` | No | Page title (metadata) |
-| `encoding` | No | `utf-8` (default) or `base64` for the `html` field |
-| `markdown_encoding` | No | `utf-8` (default) or `base64` for the `markdown` field |
-| `content_type` | No | Content-Type header (default: `text/html; charset=utf-8`). Required for image pages. |
-| `auth` | No | Authentication settings (see [Page Authentication](#page-authentication)) |
+| `html` | No* | HTML content as `utf-8` or `base64` |
+| `markdown` | No* | Markdown content as `utf-8` or `base64` |
+| `image` | No* | Base64-encoded image data |
+| `image_content_type` | No | Recommended when `image` is present; required when both image and video are present |
+| `video` | No* | Base64-encoded video data |
+| `video_content_type` | No | Recommended when `video` is present; required when both image and video are present |
+| `encoding` | No | Encoding for `html`: `utf-8` or `base64` |
+| `markdown_encoding` | No | Encoding for `markdown`: `utf-8` or `base64` |
+| `content_type` | No | Legacy binary fallback and document content type for rendered HTML pages |
+| `title` | No | Page title metadata |
+| `auth` | No | Optional page protection settings |
 
-**Response:**
+\* At least one of `html`, `markdown`, `image`, or `video` is required.
+
+### Response
+
+Standalone page:
+
 ```json
 {
   "id": "my-page",
@@ -82,126 +204,352 @@ Content-Type: application/json
 }
 ```
 
+Subdomain page:
+
+```json
+{
+  "id": "index",
+  "subdomain": "my-agent-site",
+  "path": "/",
+  "url": "https://my-agent-site.zenbin.org/",
+  "raw_url": "https://my-agent-site.zenbin.org/raw",
+  "markdown_url": "https://my-agent-site.zenbin.org/md",
+  "etag": "\"abc123...\""
+}
+```
+
+If that page also stores video, fetch it at:
+
+```http
+GET https://my-agent-site.zenbin.org/video
+```
+
 - Returns `201 Created` for new pages
-- Returns `200 OK` when updating existing pages
-- `markdown_url` is only included when `markdown` is provided
+- Returns `200 OK` for updates
+- `markdown_url` is included only when markdown is present
+- `image_url` is included only when image is present
+- `video_url` is included only when video is present
+- secret URLs are included only when `auth.urlToken` is requested
 
-### Updating Pages
+## Updating Pages
 
-**Subdomain pages:** Just POST again with the same ID and `X-Subdomain` header. No special flag needed.
+ZenBin page updates are ownership-based.
 
-**Non-subdomain pages:** Add `?overwrite=true` query parameter:
-```bash
-POST /v1/pages/my-page?overwrite=true
+### Standalone pages
+
+To update a page later, send another signed `POST` to the same page id using the **same signing key**.
+
+### Subdomain pages
+
+To update a subdomain page later, send another signed `POST` to the same page id using:
+- the **same signing key**
+- the **same `X-Subdomain` header**
+
+If you save your publish code, private key, key id, and subdomain name, your agent can keep editing the same pages later without extra setup.
+
+### Protected pages
+
+If a page uses `auth.password`, updates and deletes also require Basic Auth.
+
+## Language Examples
+
+### Deno / Web Crypto
+
+Deno works well with ZenBin because Ed25519 signing is available through Web Crypto.
+
+High-level flow:
+1. generate or load an Ed25519 keypair
+2. build the JSON body
+3. SHA-256 hash the body into `Content-Digest`
+4. build the canonical string
+5. sign it
+6. send the request with ZenBin headers
+
+The canonical string format is documented in the Skill.md and `/api/agent` docs.
+
+### Node.js
+
+In Node, the flow is the same:
+- use `crypto.createHash('sha256')` for the body digest
+- use `crypto.sign(null, ...)` with an Ed25519 private key for the signature
+- send the signed request with `fetch`
+
+Full example:
+
+```ts
+import { createHash, createPrivateKey, sign as signBytes } from 'node:crypto';
+
+const baseUrl = 'https://zenbin.org';
+const keyId = 'agent-key-123';
+const privateKeyPem = process.env.ZENBIN_PRIVATE_KEY_PEM!;
+const privateKey = createPrivateKey(privateKeyPem);
+
+const body = JSON.stringify({
+  encoding: 'base64',
+  markdown_encoding: 'base64',
+  html: Buffer.from('<!doctype html><html><body><h1>Agent Report</h1></body></html>').toString('base64'),
+  markdown: Buffer.from('# Agent Report\n').toString('base64'),
+  video: 'BASE64_VIDEO_BYTES',
+  content_type: 'video/mp4',
+  title: 'Agent Report',
+});
+
+const timestamp = new Date().toISOString();
+const nonce = crypto.randomUUID().replace(/-/g, '');
+const path = '/v1/pages/agent-report';
+const contentDigest = 'sha-256=:' + createHash('sha256').update(body).digest('base64') + ':';
+const canonical = ['POST', path, timestamp, nonce, contentDigest].join('\n');
+const signature = signBytes(null, Buffer.from(canonical), privateKey)
+  .toString('base64')
+  .replace(/\+/g, '-')
+  .replace(/\//g, '_')
+  .replace(/=+$/g, '');
+
+await fetch(baseUrl + path, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Zenbin-Key-Id': keyId,
+    'X-Zenbin-Timestamp': timestamp,
+    'X-Zenbin-Nonce': nonce,
+    'Content-Digest': contentDigest,
+    'X-Zenbin-Signature': `:${signature}:`,
+  },
+  body,
+});
 ```
 
-**Password-protected pages:** Include Basic Auth header when updating:
-```bash
-curl -X POST http://localhost:3000/v1/pages/secret?overwrite=true \
-  -H "Content-Type: application/json" \
-  -u ":mypassword123" \
-  -d '{"html": "<h1>Updated</h1>"}'
+### Python
+
+In Python, use:
+- `hashlib.sha256` for the body digest
+- an Ed25519 library such as `cryptography` for signing
+- `requests` or `httpx` to send the request
+
+Full example:
+
+```python
+import base64
+import hashlib
+import json
+import uuid
+from datetime import datetime, timezone
+
+import requests
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+
+base_url = 'https://zenbin.org'
+key_id = 'agent-key-123'
+path = '/v1/pages/hello'
+
+with open('zenbin-private-key.pem', 'rb') as f:
+    private_key = load_pem_private_key(f.read(), password=None)
+
+body_obj = {
+    'html': '<h1>Hello</h1>',
+    'markdown': '# Hello',
+    'image': 'BASE64_IMAGE_BYTES',
+    'content_type': 'image/png',
+    'title': 'Hello',
+}
+body = json.dumps(body_obj, separators=(',', ':'))
+timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+nonce = uuid.uuid4().hex
+content_digest = 'sha-256=:' + base64.b64encode(hashlib.sha256(body.encode()).digest()).decode() + ':'
+canonical = '\n'.join(['POST', path, timestamp, nonce, content_digest])
+signature = base64.urlsafe_b64encode(private_key.sign(canonical.encode())).decode().rstrip('=')
+
+response = requests.post(
+    base_url + path,
+    headers={
+        'Content-Type': 'application/json',
+        'X-Zenbin-Key-Id': key_id,
+        'X-Zenbin-Timestamp': timestamp,
+        'X-Zenbin-Nonce': nonce,
+        'Content-Digest': content_digest,
+        'X-Zenbin-Signature': f':{signature}:',
+    },
+    data=body,
+)
+print(response.status_code, response.text)
 ```
 
-### Delete a Page
+### Best practice for all runtimes
 
-```bash
+Save these values if you want to update the page later:
+- private key
+- key id
+- page id
+- subdomain name, if used
+
+Then re-run the same signed `POST` flow to replace the page.
+
+## Delete a Page
+
+```http
 DELETE /v1/pages/{id}
 ```
 
-For password-protected pages, include Basic Auth. For subdomain pages, include `X-Subdomain` header.
+Requirements:
+- valid signed request
+- same owning key (or override-capable key)
+- `X-Subdomain` header for subdomain pages
+- Basic Auth if the page is password-protected
+
+Returns `204 No Content` on success.
+
+## Read Endpoints
 
 ### View a Page
 
-```bash
+```http
 GET /p/{id}
 ```
 
-Returns the HTML page with security headers applied. Supports `If-None-Match` for caching (returns `304 Not Modified` if unchanged).
+Behavior depends on stored content:
+- HTML present → returns rendered HTML
+- Markdown only → returns markdown
+- Image only → returns image bytes directly
+- Video only → returns video bytes directly
 
 ### Fetch Raw HTML
 
-```bash
+```http
 GET /p/{id}/raw
 ```
 
-Returns the raw HTML as `text/plain` with a `Content-Disposition` header for downloading.
+Returns raw HTML as `text/plain`.
 
 ### Fetch Markdown Source
 
-```bash
+```http
 GET /p/{id}/md
 ```
 
-Returns the markdown source as `text/markdown`. Returns `404` if the page has no markdown content.
+Returns markdown as `text/markdown`.
 
-Alternatively, request markdown via content negotiation:
+You can also request markdown with content negotiation:
 
-```bash
+```http
 GET /p/{id}
 Accept: text/markdown
 ```
 
-### Markdown-Only Pages
+### Fetch Image
 
-If a page is created with only markdown (no HTML), `GET /p/{id}` automatically returns the markdown content with `Content-Type: text/markdown`.
-
-### Images
-
-Upload images up to 5MB. Supported formats: PNG, JPEG, GIF, WebP, SVG.
-
-**Create an image page:**
-
-```bash
-# Encode image to base64
-IMAGE_BASE64=$(base64 -i myimage.png | tr -d '\n')
-
-curl -X POST http://localhost:3000/v1/pages/my-logo \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"image\": \"$IMAGE_BASE64\",
-    \"content_type\": \"image/png\"
-  }"
+```http
+GET /p/{id}/image
 ```
 
-**Access the image:**
+Returns the stored image when the page has one.
 
-```bash
-# View in browser
-GET /p/my-logo
+If a page has both HTML and image:
+- `/p/{id}` returns HTML
+- `/p/{id}/image` returns the image
 
-# Explicit image endpoint
-GET /p/my-logo/image
+### Fetch Video
+
+```http
+GET /p/{id}/video
 ```
 
-The image is served with the correct `Content-Type` header. When a page has both `html` and `image`, the HTML is served at `/p/{id}` and the image at `/p/{id}/image`.
+Returns the stored video when the page has one.
 
-### Health Check
+If a page has both HTML and video:
+- `/p/{id}` returns HTML
+- `/p/{id}/video` returns the video
 
-```bash
-GET /health
+## Images
+
+Supported image types:
+- `image/png`
+- `image/jpeg`
+- `image/gif`
+- `image/webp`
+- `image/svg+xml`
+
+Limits:
+- HTML + Markdown combined: 512KB by default
+- Image payload: 5MB by default
+
+Example image-only publish body:
+
+```json
+{
+  "image": "BASE64_IMAGE_BYTES",
+  "content_type": "image/png"
+}
 ```
 
-Returns `{"status": "ok", "timestamp": "..."}`.
+Send it with the same signed request headers shown in the main publish example.
 
-### Agent Instructions
+### Content type rules
 
-```bash
-GET /api/agent
+- use `image_content_type` for images
+- use `video_content_type` for videos
+- if a page has only one binary asset, `content_type` still works as a legacy fallback
+- if a page has both image and video, specify both `image_content_type` and `video_content_type`
+- for HTML pages, `content_type` is the document content type for the rendered page
+
+## Videos
+
+Supported video types:
+- `video/mp4`
+- `video/webm`
+- `video/ogg`
+- `video/quicktime`
+
+Example video-only publish body:
+
+```json
+{
+  "video": "BASE64_VIDEO_BYTES",
+  "content_type": "video/mp4"
+}
 ```
 
-Returns markdown instructions for AI agents on how to use the API.
+Example mixed HTML + Markdown + Image + Video publish body:
 
-### Proxy External Requests
+```json
+{
+  "encoding": "base64",
+  "markdown_encoding": "base64",
+  "html": "BASE64_HTML",
+  "markdown": "BASE64_MARKDOWN",
+  "image": "BASE64_IMAGE_BYTES",
+  "image_content_type": "image/png",
+  "video": "BASE64_VIDEO_BYTES",
+  "video_content_type": "video/mp4",
+  "title": "Demo Page"
+}
+```
 
-```bash
+Subdomain video update flow:
+- claim a subdomain once
+- publish with `X-Subdomain`
+- save your private key, key id, subdomain name, and page id
+- re-run the same signed publish later to replace the video or page content
+
+## Viewer Authentication
+
+Pages are public by default.
+
+Optional protection methods:
+- `auth.password` — password via HTTP Basic Auth
+- `auth.urlToken` — secret shareable URL token
+- both together
+
+## Proxy External Requests
+
+```http
 POST /api/proxy
 Content-Type: application/json
 ```
 
-Allows ZenBin-hosted pages to make external HTTP requests through the server, bypassing CORS restrictions.
+Allows ZenBin-hosted pages to make external HTTP requests through the server.
 
-**Request body:**
+Request body:
+
 ```json
 {
   "url": "https://api.example.com/data",
@@ -213,180 +561,21 @@ Allows ZenBin-hosted pages to make external HTTP requests through the server, by
 }
 ```
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `url` | Yes | Target URL (http/https only) |
-| `method` | No | HTTP method (default: `GET`) |
-| `body` | No | Request body to forward (JSON) |
-| `timeout` | No | Timeout in ms (max: 30000) |
-| `contentType` | No | Content-Type for outgoing request |
-| `accept` | No | Accept header for outgoing request |
-| `auth` | No | Authentication config (see below) |
+## Health Check
 
-**Authentication types:**
-
-| Type | Usage | Result Header |
-|------|-------|---------------|
-| `bearer` | `{ type: "bearer", credentials: "token" }` | `Authorization: Bearer token` |
-| `basic` | `{ type: "basic", credentials: "base64" }` | `Authorization: Basic base64` |
-| `api-key` | `{ type: "api-key", credentials: "key", headerName: "X-API-Key" }` | `X-API-Key: key` |
-
-**Response:**
-```json
-{
-  "status": 200,
-  "statusText": "OK",
-  "headers": { "content-type": "application/json" },
-  "body": { ... }
-}
+```http
+GET /health
 ```
 
-**Security:** Only requests originating from ZenBin-hosted pages are allowed. SSRF protection blocks private IPs and internal endpoints.
-
-## Examples
-
-### Simple page
-
-```bash
-curl -X POST http://localhost:3000/v1/pages/hello \
-  -H "Content-Type: application/json" \
-  -d '{"html":"<h1>Hello World</h1>"}'
-```
-
-### Styled page
-
-```bash
-curl -X POST http://localhost:3000/v1/pages/demo \
-  -H "Content-Type: application/json" \
-  -d '{
-    "html": "<!DOCTYPE html><html><head><style>body{font-family:sans-serif;padding:2rem}</style></head><body><h1>Demo</h1><p>This is a demo page.</p></body></html>",
-    "title": "Demo Page"
-  }'
-```
-
-### Base64 encoded content
-
-```bash
-# Encode your HTML
-HTML_BASE64=$(echo -n '<h1>Encoded</h1>' | base64)
-
-curl -X POST http://localhost:3000/v1/pages/encoded \
-  -H "Content-Type: application/json" \
-  -d "{\"encoding\":\"base64\",\"html\":\"$HTML_BASE64\"}"
-```
-
-### Page with HTML and Markdown
-
-```bash
-curl -X POST http://localhost:3000/v1/pages/article \
-  -H "Content-Type: application/json" \
-  -d '{
-    "html": "<!DOCTYPE html><html><head><style>body{font-family:system-ui;max-width:700px;margin:0 auto;padding:2rem}</style></head><body><h1>My Article</h1><p>Content here.</p></body></html>",
-    "markdown": "# My Article\n\nContent here.",
-    "title": "My Article"
-  }'
-```
-
-Response includes markdown URL:
-```json
-{
-  "id": "article",
-  "url": "http://localhost:3000/p/article",
-  "raw_url": "http://localhost:3000/p/article/raw",
-  "markdown_url": "http://localhost:3000/p/article/md",
-  "etag": "\"...\""
-}
-```
-
-### Markdown-only page
-
-```bash
-curl -X POST http://localhost:3000/v1/pages/notes \
-  -H "Content-Type: application/json" \
-  -d '{
-    "markdown": "# Notes\n\n- Item 1\n- Item 2\n- Item 3"
-  }'
-```
-
-## Page Authentication
-
-Pages are public by default. You can optionally protect pages with password authentication, secret URL tokens, or both.
-
-### Password Protection
-
-Add HTTP Basic Auth to require a password when viewing the page:
-
-```bash
-curl -X POST http://localhost:3000/v1/pages/secret \
-  -H "Content-Type: application/json" \
-  -d '{
-    "html": "<h1>Secret Page</h1>",
-    "auth": { "password": "mypassword123" }
-  }'
-```
-
-Browsers will automatically prompt for the password. With curl:
-
-```bash
-curl -u ":mypassword123" http://localhost:3000/p/secret
-```
-
-### URL Token (Secret Links)
-
-Generate a secret shareable URL that grants access without a password:
-
-```bash
-curl -X POST http://localhost:3000/v1/pages/shared \
-  -H "Content-Type: application/json" \
-  -d '{
-    "html": "<h1>Shared Page</h1>",
-    "auth": { "urlToken": true }
-  }'
-```
-
-Response includes secret URLs:
+Returns:
 
 ```json
-{
-  "id": "shared",
-  "url": "http://localhost:3000/p/shared",
-  "secret_url": "http://localhost:3000/p/shared?token=abc123...",
-  "secret_raw_url": "http://localhost:3000/p/shared/raw?token=abc123..."
-}
+{ "status": "ok", "timestamp": "..." }
 ```
-
-If the page has markdown, the response also includes `secret_markdown_url`:
-
-```json
-{
-  "secret_markdown_url": "http://localhost:3000/p/shared/md?token=abc123..."
-}
-```
-
-**Note:** The token is only returned once at creation and cannot be retrieved later.
-
-### Both Methods
-
-Use both password and URL token for maximum flexibility:
-
-```bash
-curl -X POST http://localhost:3000/v1/pages/dual \
-  -H "Content-Type: application/json" \
-  -d '{
-    "html": "<h1>Dual Auth</h1>",
-    "auth": { "password": "mypassword123", "urlToken": true }
-  }'
-```
-
-### Brute-Force Protection
-
-Protected pages have built-in brute-force protection:
-- After 5 failed attempts within 15 minutes, the page is locked for 15 minutes
-- Returns `429 Too Many Requests` with a `Retry-After` header when locked
 
 ## Configuration
 
-Configure via environment variables or `.env` file:
+ZenBin loads `.env` automatically.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -394,94 +583,58 @@ Configure via environment variables or `.env` file:
 | `HOST` | `0.0.0.0` | Server host |
 | `BASE_URL` | `http://localhost:3000` | Base URL for generated links |
 | `LMDB_PATH` | `./data/zenbin.lmdb` | Database path |
-| `MAX_PAYLOAD_SIZE` | `524288` | Max HTML/markdown size in bytes (512KB) |
-| `MAX_IMAGE_SIZE` | `5242880` | Max image size in bytes (5MB) |
+| `MAX_PAYLOAD_SIZE` | `524288` | Max HTML+Markdown size in bytes |
+| `MAX_IMAGE_SIZE` | `5242880` | Max image size in bytes |
+| `MAX_VIDEO_SIZE` | `52428800` | Max video size in bytes |
 | `MAX_ID_LENGTH` | `128` | Max page ID length |
-| `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window (ms) |
-| `RATE_LIMIT_MAX_REQUESTS` | `100` | Max requests per window |
-| `PROXY_TIMEOUT_MS` | `30000` | Max timeout for proxy requests |
-| `PROXY_MAX_REQUEST_SIZE` | `5242880` | Max proxy request body (5MB) |
-| `PROXY_MAX_RESPONSE_SIZE` | `5242880` | Max proxy response size (5MB) |
-| `PROXY_ALLOWED_DOMAINS` | `` | Comma-separated domain allowlist (empty = all) |
-| `PROXY_RATE_LIMIT_MAX` | `5` | Max proxy requests per window |
-| `PROXY_RATE_LIMIT_WINDOW_MS` | `60000` | Proxy rate limit window (ms) |
-| `PROXY_MAX_REDIRECTS` | `3` | Max redirects to follow |
-| `AUTH_BCRYPT_ROUNDS` | `10` | bcrypt cost factor for password hashing |
-| `AUTH_TOKEN_LENGTH` | `32` | URL token length in bytes (64 hex chars) |
+| `RATE_LIMIT_WINDOW_MS` | `60000` | General rate limit window |
+| `RATE_LIMIT_MAX_REQUESTS` | `100` | General max requests per window |
+| `PROXY_TIMEOUT_MS` | `30000` | Max proxy timeout |
+| `PROXY_MAX_REQUEST_SIZE` | `5242880` | Max proxy request body |
+| `PROXY_MAX_RESPONSE_SIZE` | `5242880` | Max proxy response body |
+| `PROXY_ALLOWED_DOMAINS` | `` | Optional proxy allowlist |
+| `PROXY_RATE_LIMIT_MAX` | `5` | Proxy requests per window |
+| `PROXY_RATE_LIMIT_WINDOW_MS` | `60000` | Proxy rate limit window |
+| `PROXY_MAX_REDIRECTS` | `3` | Max redirects |
+| `AUTH_BCRYPT_ROUNDS` | `10` | bcrypt cost factor |
+| `AUTH_TOKEN_LENGTH` | `32` | URL token byte length |
 | `AUTH_MIN_PASSWORD_LENGTH` | `8` | Minimum password length |
-| `AUTH_MAX_FAILED_ATTEMPTS` | `5` | Max failed auth attempts before lockout |
-| `AUTH_FAILED_ATTEMPT_WINDOW_MS` | `900000` | Failed attempt tracking window (15 min) |
-| `AUTH_LOCKOUT_DURATION_MS` | `900000` | Lockout duration after max failures (15 min) |
-| `FREE_TIER_MONTHLY_LIMIT` | `100` | Free tier request limit per 30 days |
-| `FREE_TIER_WINDOW_MS` | `2592000000` | Free tier window in ms (30 days) |
-| `SUBDOMAINS_ENABLED` | `true` | Enable subdomain feature |
-| `SUBDOMAIN_MAX_LENGTH` | `63` | Max subdomain name length |
+| `AUTH_MAX_FAILED_ATTEMPTS` | `5` | Failed auth attempts before lockout |
+| `AUTH_FAILED_ATTEMPT_WINDOW_MS` | `900000` | Failed auth window |
+| `AUTH_LOCKOUT_DURATION_MS` | `900000` | Lockout duration |
+| `SIGNED_PUBLISHING_MAX_TIMESTAMP_SKEW_MS` | `300000` | Allowed signed timestamp skew |
+| `SIGNED_PUBLISHING_NONCE_TTL_MS` | `300000` | Nonce replay window |
+| `ADMIN_TOKEN` | `dev-admin-token` | Admin route token |
+| `POSTHOG_KEY` | `` | Optional PostHog key |
+| `FREE_TIER_MONTHLY_LIMIT` | `100` | Free tier request limit |
+| `FREE_TIER_WINDOW_MS` | `2592000000` | Free tier window |
+| `SUBDOMAINS_ENABLED` | `true` | Enable subdomains |
+| `SUBDOMAIN_MAX_LENGTH` | `63` | Max subdomain length |
 | `SUBDOMAIN_MAX_PAGES` | `100` | Max pages per subdomain |
-| `SUBDOMAIN_RESERVED_NAMES` | (see config) | Comma-separated reserved names |
-| `SUBDOMAIN_BASE_DOMAIN` | `zenbin.org` | Base domain for subdomains |
+| `SUBDOMAIN_RESERVED_NAMES` | (see config) | Reserved names |
+| `SUBDOMAIN_BASE_DOMAIN` | `zenbin.org` | Base domain |
 
-## Page ID Rules
+## Examples
 
-Page IDs must:
-- Contain only letters, numbers, dots, underscores, and hyphens (`A-Za-z0-9._-`)
-- Be 128 characters or less (configurable)
+Ready-to-adapt publisher examples are included in `examples/`:
+- `examples/node-publish.mjs`
+- `examples/python_publish.py`
+- `examples/deno_publish.ts`
 
-Valid examples: `my-page`, `demo.v2`, `user_123`, `Report-2024.01`
-
-## Security
-
-Pages are served with restrictive security headers:
-
-- `Content-Security-Policy` — Restricts external resources
-- `X-Content-Type-Options: nosniff`
-- `Referrer-Policy: no-referrer`
-- `Cross-Origin-Opener-Policy: same-origin`
-- `Cross-Origin-Resource-Policy: same-site`
-- `X-Frame-Options: DENY`
-
-## Deploy to Render
-
-ZenBin includes a `render.yaml` Blueprint for easy deployment to [Render.com](https://render.com).
-
-### One-Click Deploy
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/twilson63/zenbin)
-
-### Manual Setup
-
-1. Fork or clone this repository
-2. Create a new **Blueprint** in Render Dashboard
-3. Connect your repository
-4. Set the `BASE_URL` environment variable to your Render URL (e.g., `https://zenbin.org`)
-5. Deploy
-
-### What's Included
-
-The Blueprint configures:
-- **Web Service** — Node.js runtime on the Starter plan
-- **Persistent Disk** — 1GB mounted at `/var/data` for LMDB storage
-- **Health Check** — Monitors `/health` endpoint
-- **Environment Variables** — Pre-configured for production
-
-### Limitations
-
-Due to Render's persistent disk constraints:
-- **Single instance only** — Services with attached disks cannot scale horizontally
-- **No zero-downtime deploys** — Brief downtime during redeploys (a few seconds)
-
-For multi-instance deployments, consider replacing LMDB with Render Postgres or Redis.
+Each example shows the same core flow:
+1. build the JSON body
+2. hash it into `Content-Digest`
+3. build the canonical signing string
+4. sign it with Ed25519
+5. `POST` it to ZenBin
 
 ## Development
 
 ```bash
-# Run with hot reload
 npm run dev
-
-# Run tests
-npm test
-
-# Build for production
 npm run build
+npm test
+npm run typecheck
 ```
 
 ## License

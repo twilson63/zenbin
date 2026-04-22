@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 // ZenBin Configuration
 // Uses getters to ensure env vars are read at access time, not module load time
 
@@ -15,7 +17,7 @@ export const config = {
   get maxImageSize() { return parseInt(process.env.MAX_IMAGE_SIZE || '5242880', 10); },
   get maxIdLength() { return parseInt(process.env.MAX_ID_LENGTH || '128', 10); },
 
-  // Image settings
+  // Media settings
   allowedImageTypes: [
     'image/png',
     'image/jpeg',
@@ -23,16 +25,13 @@ export const config = {
     'image/webp',
     'image/svg+xml',
   ],
-
-  // Video settings
   get videoStoragePath() { return process.env.VIDEO_STORAGE_PATH || './data/videos'; },
-  get maxVideoSize() { return parseInt(process.env.MAX_VIDEO_SIZE || '104857600', 10); },
+  get maxVideoSize() { return parseInt(process.env.MAX_VIDEO_SIZE || '52428800', 10); },
   allowedVideoTypes: [
     'video/mp4',
     'video/webm',
     'video/ogg',
     'video/quicktime',
-    'video/x-msvideo',
   ],
 
   // Rate Limiting
@@ -58,6 +57,15 @@ export const config = {
       failedAttemptWindowMs: parseInt(process.env.AUTH_FAILED_ATTEMPT_WINDOW_MS || '900000', 10),
       lockoutDurationMs: parseInt(process.env.AUTH_LOCKOUT_DURATION_MS || '900000', 10),
     };
+  },
+
+  signedPublishing: {
+    maxTimestampSkewMs: parseInt(process.env.SIGNED_PUBLISHING_MAX_TIMESTAMP_SKEW_MS || '300000', 10),
+    nonceTtlMs: parseInt(process.env.SIGNED_PUBLISHING_NONCE_TTL_MS || '300000', 10),
+  },
+
+  admin: {
+    token: process.env.ADMIN_TOKEN || 'dev-admin-token',
   },
 
   // Analytics

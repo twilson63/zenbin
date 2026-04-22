@@ -8,9 +8,10 @@ import { render } from '../routes/render.js';
 import { initDatabase, closeDatabase } from '../storage/db.js';
 import { config } from '../config.js';
 import { rmSync } from 'fs';
+import { createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
 
 const TEST_DB_PATH = './data/test-subdomains.lmdb';
-const TEST_SUBDOMAIN_DB_PATH = './data/test-subdomains.lmdb-subdomains';
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
 
 // Type for context variables
 type Variables = { subdomain: string };
@@ -18,6 +19,8 @@ type Variables = { subdomain: string };
 // Generate unique IDs for each test run
 let testId: number;
 const uniqueId = (base: string) => `${base}-${testId++}`;
+let signer: TestSigner;
+let otherSigner: TestSigner;
 
 // Create test apps
 const app = new Hono<{ Variables: Variables }>();
@@ -41,13 +44,16 @@ app.use('*', async (c, next) => {
 });
 app.route('/', subdomainRender);
 
-beforeAll(() => {
-  try {
-    rmSync(TEST_DB_PATH, { recursive: true, force: true });
-    rmSync(TEST_SUBDOMAIN_DB_PATH, { recursive: true, force: true });
-  } catch { /* ignore */ }
+beforeAll(async () => {
+  for (const suffix of TEST_DB_SUFFIXES) {
+    try {
+      rmSync(`${TEST_DB_PATH}${suffix}`, { recursive: true, force: true });
+    } catch { /* ignore */ }
+  }
   process.env.LMDB_PATH = TEST_DB_PATH;
   initDatabase();
+  signer = await createTestSigner(`subdomain-owner-${Date.now()}`);
+  otherSigner = await createTestSigner(`subdomain-other-${Date.now()}`);
 });
 
 beforeEach(() => {
@@ -56,10 +62,11 @@ beforeEach(() => {
 
 afterAll(async () => {
   await closeDatabase();
-  try {
-    rmSync(TEST_DB_PATH, { recursive: true, force: true });
-    rmSync(TEST_SUBDOMAIN_DB_PATH, { recursive: true, force: true });
-  } catch { /* ignore */ }
+  for (const suffix of TEST_DB_SUFFIXES) {
+    try {
+      rmSync(`${TEST_DB_PATH}${suffix}`, { recursive: true, force: true });
+    } catch { /* ignore */ }
+  }
 });
 
 describe('Subdomains', () => {
@@ -67,7 +74,7 @@ describe('Subdomains', () => {
     it('should claim an available subdomain', async () => {
       const name = uniqueId('my-test-site');
       const res = await app.request(`/v1/subdomains/${name}`, {
-        method: 'POST',
+        ...jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }),
       });
       expect(res.status).toBe(201);
       const body = await res.json() as { name: string; url: string; created_at: string };
@@ -77,9 +84,9 @@ describe('Subdomains', () => {
     });
 
     it('should normalize subdomain to lowercase', async () => {
-      const name = uniqueId('MyTestSite').toLowerCase();
-      const res = await app.request(`/v1/subdomains/${uniqueId('MyTestSite')}`, {
-        method: 'POST',
+      const requestedName = uniqueId('MyTestSite');
+      const res = await app.request(`/v1/subdomains/${requestedName}`, {
+        ...jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${requestedName}` }),
       });
       expect(res.status).toBe(201);
       const body = await res.json() as { name: string };
@@ -89,11 +96,11 @@ describe('Subdomains', () => {
     it('should reject already taken subdomain', async () => {
       const name = uniqueId('my-site');
       // First claim
-      await app.request(`/v1/subdomains/${name}`, { method: 'POST' });
+      await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
       
       // Second claim
       const res = await app.request(`/v1/subdomains/${name}`, {
-        method: 'POST',
+        ...jsonSignedRequest({ signer: otherSigner, method: 'POST', path: `/v1/subdomains/${name}` }),
       });
       expect(res.status).toBe(409);
       const body = await res.json() as { error: string };
@@ -102,7 +109,7 @@ describe('Subdomains', () => {
 
     it('should reject reserved subdomain names', async () => {
       const res = await app.request('/v1/subdomains/www', {
-        method: 'POST',
+        ...jsonSignedRequest({ signer, method: 'POST', path: '/v1/subdomains/www' }),
       });
       expect(res.status).toBe(400);
       const body = await res.json() as { error: string };
@@ -111,14 +118,14 @@ describe('Subdomains', () => {
 
     it('should reject api as reserved', async () => {
       const res = await app.request('/v1/subdomains/api', {
-        method: 'POST',
+        ...jsonSignedRequest({ signer, method: 'POST', path: '/v1/subdomains/api' }),
       });
       expect(res.status).toBe(400);
     });
 
     it('should reject subdomain that is too short', async () => {
       const res = await app.request('/v1/subdomains/ab', {
-        method: 'POST',
+        ...jsonSignedRequest({ signer, method: 'POST', path: '/v1/subdomains/ab' }),
       });
       expect(res.status).toBe(400);
       const body = await res.json() as { error: string };
@@ -127,7 +134,7 @@ describe('Subdomains', () => {
 
     it('should reject invalid subdomain patterns', async () => {
       const res = await app.request('/v1/subdomains/123site', {
-        method: 'POST',
+        ...jsonSignedRequest({ signer, method: 'POST', path: '/v1/subdomains/123site' }),
       });
       expect(res.status).toBe(400);
       const body = await res.json() as { error: string };
@@ -136,7 +143,7 @@ describe('Subdomains', () => {
 
     it('should reject subdomain ending with hyphen', async () => {
       const res = await app.request('/v1/subdomains/my-site-', {
-        method: 'POST',
+        ...jsonSignedRequest({ signer, method: 'POST', path: '/v1/subdomains/my-site-' }),
       });
       expect(res.status).toBe(400);
     });
@@ -146,7 +153,7 @@ describe('Subdomains', () => {
     it('should get subdomain info', async () => {
       const name = uniqueId('test-site');
       // Claim first
-      await app.request(`/v1/subdomains/${name}`, { method: 'POST' });
+        await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
       
       const res = await app.request(`/v1/subdomains/${name}`);
       expect(res.status).toBe(200);
@@ -165,16 +172,17 @@ describe('Subdomains', () => {
     it('should publish index page to subdomain', async () => {
       const name = uniqueId('test-site');
       // Claim subdomain first
-      await app.request(`/v1/subdomains/${name}`, { method: 'POST' });
+      await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
       
       // Publish index page
-      const res = await app.request('/v1/pages/index', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Subdomain': name,
-        },
-        body: JSON.stringify({ html: '<h1>Hello Subdomain!</h1>' }),
+        const res = await app.request('/v1/pages/index', {
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: '/v1/pages/index',
+          headers: { 'X-Subdomain': name },
+          body: { html: '<h1>Hello Subdomain!</h1>' },
+        }),
       });
       
       expect(res.status).toBe(201);
@@ -187,15 +195,16 @@ describe('Subdomains', () => {
 
     it('should publish nested path to subdomain', async () => {
       const name = uniqueId('test-site');
-      await app.request(`/v1/subdomains/${name}`, { method: 'POST' });
+      await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
       
       const res = await app.request('/v1/pages/about', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Subdomain': name,
-        },
-        body: JSON.stringify({ html: '<h1>About</h1>' }),
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: '/v1/pages/about',
+          headers: { 'X-Subdomain': name },
+          body: { html: '<h1>About</h1>' },
+        }),
       });
       
       expect(res.status).toBe(201);
@@ -204,14 +213,84 @@ describe('Subdomains', () => {
       expect(body.path).toBe('/about');
     });
 
+    it('should serve explicit video endpoint on subdomains', async () => {
+      const name = uniqueId('video-site');
+      await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
+
+      const publishRes = await app.request('/v1/pages/index', {
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: '/v1/pages/index',
+          headers: { 'X-Subdomain': name },
+          body: {
+            html: '<h1>Home</h1>',
+            video: Buffer.from('subdomain-video').toString('base64'),
+            content_type: 'video/mp4',
+          },
+        }),
+      });
+
+      expect(publishRes.status).toBe(201);
+
+      const videoRes = await app.request('/video', {
+        headers: { host: `${name}.${config.subdomains.baseDomain}` },
+      });
+
+      expect(videoRes.status).toBe(200);
+      expect(videoRes.headers.get('content-type')).toContain('video/mp4');
+      expect(await videoRes.text()).toBe('subdomain-video');
+    });
+
+    it('should support both image and video on the same subdomain page', async () => {
+      const name = uniqueId('media-site');
+      await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
+
+      const publishRes = await app.request('/v1/pages/index', {
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: '/v1/pages/index',
+          headers: { 'X-Subdomain': name },
+          body: {
+            html: '<h1>Home</h1>',
+            image: Buffer.from('subdomain-image').toString('base64'),
+            image_content_type: 'image/png',
+            video: Buffer.from('subdomain-video-2').toString('base64'),
+            video_content_type: 'video/mp4',
+          },
+        }),
+      });
+
+      expect(publishRes.status).toBe(201);
+      const payload = await publishRes.json() as { image_url: string; video_url: string };
+      expect(payload.image_url).toContain('/image');
+      expect(payload.video_url).toContain('/video');
+
+      const imageRes = await app.request('/image', {
+        headers: { host: `${name}.${config.subdomains.baseDomain}` },
+      });
+      expect(imageRes.status).toBe(200);
+      expect(imageRes.headers.get('content-type')).toContain('image/png');
+      expect(await imageRes.text()).toBe('subdomain-image');
+
+      const videoRes = await app.request('/video', {
+        headers: { host: `${name}.${config.subdomains.baseDomain}` },
+      });
+      expect(videoRes.status).toBe(200);
+      expect(videoRes.headers.get('content-type')).toContain('video/mp4');
+      expect(await videoRes.text()).toBe('subdomain-video-2');
+    });
+
     it('should reject publish to non-existent subdomain', async () => {
       const res = await app.request('/v1/pages/index', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Subdomain': 'nonexistent',
-        },
-        body: JSON.stringify({ html: '<h1>Test</h1>' }),
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: '/v1/pages/index',
+          headers: { 'X-Subdomain': 'nonexistent' },
+          body: { html: '<h1>Test</h1>' },
+        }),
       });
       
       expect(res.status).toBe(404);
@@ -221,26 +300,28 @@ describe('Subdomains', () => {
 
     it('should reject duplicate page in same subdomain', async () => {
       const name = uniqueId('test-site');
-      await app.request(`/v1/subdomains/${name}`, { method: 'POST' });
+      await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
       
       // First publish
       await app.request('/v1/pages/index', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Subdomain': name,
-        },
-        body: JSON.stringify({ html: '<h1>First</h1>' }),
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: '/v1/pages/index',
+          headers: { 'X-Subdomain': name },
+          body: { html: '<h1>First</h1>' },
+        }),
       });
       
       // Second publish to same page - now updates
       const res = await app.request('/v1/pages/index', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Subdomain': name,
-        },
-        body: JSON.stringify({ html: '<h1>Second</h1>' }),
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: '/v1/pages/index',
+          headers: { 'X-Subdomain': name },
+          body: { html: '<h1>Second</h1>' },
+        }),
       });
       
       expect(res.status).toBe(200); // Update returns 200
@@ -250,18 +331,14 @@ describe('Subdomains', () => {
   describe('List Subdomain Pages', () => {
     it('should list pages in subdomain', async () => {
       const name = uniqueId('test-site');
-      await app.request(`/v1/subdomains/${name}`, { method: 'POST' });
+      await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
       
       // Publish a few pages
       await app.request('/v1/pages/index', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Subdomain': name },
-        body: JSON.stringify({ html: '<h1>Home</h1>' }),
+        ...jsonSignedRequest({ signer, method: 'POST', path: '/v1/pages/index', headers: { 'X-Subdomain': name }, body: { html: '<h1>Home</h1>' } }),
       });
       await app.request('/v1/pages/about', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Subdomain': name },
-        body: JSON.stringify({ html: '<h1>About</h1>' }),
+        ...jsonSignedRequest({ signer, method: 'POST', path: '/v1/pages/about', headers: { 'X-Subdomain': name }, body: { html: '<h1>About</h1>' } }),
       });
       
       const res = await app.request(`/v1/subdomains/${name}/pages`);
@@ -277,15 +354,13 @@ describe('Subdomains', () => {
   describe('Delete Subdomain', () => {
     it('should delete subdomain and all its pages', async () => {
       const name = uniqueId('test-site');
-      await app.request(`/v1/subdomains/${name}`, { method: 'POST' });
+      await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
       await app.request('/v1/pages/index', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Subdomain': name },
-        body: JSON.stringify({ html: '<h1>Test</h1>' }),
+        ...jsonSignedRequest({ signer, method: 'POST', path: '/v1/pages/index', headers: { 'X-Subdomain': name }, body: { html: '<h1>Test</h1>' } }),
       });
       
       const res = await app.request(`/v1/subdomains/${name}`, {
-        method: 'DELETE',
+        ...jsonSignedRequest({ signer, method: 'DELETE', path: `/v1/subdomains/${name}` }),
       });
       
       expect(res.status).toBe(204);
@@ -297,7 +372,7 @@ describe('Subdomains', () => {
 
     it('should return 404 when deleting non-existent subdomain', async () => {
       const res = await app.request('/v1/subdomains/nonexistent', {
-        method: 'DELETE',
+        ...jsonSignedRequest({ signer, method: 'DELETE', path: '/v1/subdomains/nonexistent' }),
       });
       expect(res.status).toBe(404);
     });
@@ -305,8 +380,10 @@ describe('Subdomains', () => {
 
   describe('Statistics', () => {
     it('should include subdomain count in stats', async () => {
-      await app.request(`/v1/subdomains/${uniqueId('site1')}`, { method: 'POST' });
-      await app.request(`/v1/subdomains/${uniqueId('site2')}`, { method: 'POST' });
+      const site1 = uniqueId('site1');
+      const site2 = uniqueId('site2');
+      await app.request(`/v1/subdomains/${site1}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${site1}` }));
+      await app.request(`/v1/subdomains/${site2}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${site2}` }));
       
       const res = await app.request('/v1/stats');
       expect(res.status).toBe(200);

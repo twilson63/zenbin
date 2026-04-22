@@ -1,22 +1,33 @@
-import { Hono } from 'hono';
+import { Context, Hono } from 'hono';
 import { config } from '../config.js';
-import { savePage, getPage, getSubdomain, incrementSubdomainPageCount, decrementSubdomainPageCount } from '../storage/db.js';
-import { generateEtag } from '../utils/etag.js';
-import { validateId, validatePageBody, decodeHtml, decodeMarkdown, validateAuthInput } from '../utils/validation.js';
-import { hashPassword, generateUrlToken, verifyPassword, parseBasicAuth } from '../utils/auth.js';
-import { validateSubdomainName } from './subdomains.js';
-import { trackApiCall, trackPageCreated, trackPageUpdated, trackPageDeleted } from '../analytics/posthog.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
-import { deletePage as deletePageFromDb } from '../storage/db.js';
-import { saveVideo, deleteVideo } from '../storage/video.js';
+import { hasScope, requireSignedAgent } from '../middleware/signedAgent.js';
+import { decrementSubdomainPageCount, deletePage as deletePageFromDb, getPage, getSubdomain, incrementSubdomainPageCount, saveAuditLog, savePage } from '../storage/db.js';
+import { generateEtag } from '../utils/etag.js';
+import { generateUrlToken, hashPassword, parseBasicAuth, verifyPassword } from '../utils/auth.js';
+import { decodeHtml, decodeMarkdown, validateAuthInput, validateId, validatePageBody } from '../utils/validation.js';
+import { trackApiCall, trackPageCreated, trackPageDeleted, trackPageUpdated } from '../analytics/posthog.js';
+import { validateSubdomainName } from './subdomains.js';
 
 const pages = new Hono();
 
+/**
+ * Request payload accepted by POST /v1/pages/:id.
+ *
+ * Notes for maintainers:
+ * - html and markdown may be sent together in the same publish.
+ * - html uses `encoding`; markdown uses `markdown_encoding` with `encoding` as fallback.
+ * - image and video are expected to be base64 strings.
+ * - content_type remains the legacy binary/document content type.
+ * - image_content_type and video_content_type allow storing both assets on one page.
+ */
 interface CreatePageBody {
   html?: string;
   markdown?: string;
   image?: string;
-  video?: string;  // Base64-encoded video data
+  image_content_type?: string;
+  video?: string;
+  video_content_type?: string;
   encoding?: 'utf-8' | 'base64';
   markdown_encoding?: 'utf-8' | 'base64';
   content_type?: string;
@@ -28,43 +39,83 @@ interface CreatePageBody {
   };
 }
 
-// POST /v1/pages/:id - Create or replace a page
+pages.use('*', requireSignedAgent);
+
+function getSignedKey(c: Context): string {
+  const signedAgent = c.get('signedAgent');
+  if (!signedAgent) {
+    throw new Error('Signed agent context missing');
+  }
+  return signedAgent.key.keyId;
+}
+
+function currentKeyCanOverride(c: Context, scope: string): boolean {
+  const signedAgent = c.get('signedAgent');
+  return Boolean(signedAgent && hasScope(signedAgent.key, scope));
+}
+
+async function verifyPageWriteAuth(c: Context, id: string, subdomain: string | undefined, passwordHash: string) {
+  const rateLimit = checkAuthRateLimit(id);
+  if (!rateLimit.allowed) {
+    c.header('Retry-After', String(rateLimit.retryAfter));
+    return c.json({ error: 'Too many failed authentication attempts' }, 429);
+  }
+
+  const authHeader = c.req.header('Authorization');
+  const basicAuth = parseBasicAuth(authHeader);
+  const realm = subdomain ? `ZenBin-${subdomain}-${id}` : `ZenBin-${id}`;
+
+  if (!basicAuth) {
+    c.header('WWW-Authenticate', `Basic realm="${realm}"`);
+    return c.json({ error: 'Authentication required for this page' }, 401);
+  }
+
+  const validPassword = await verifyPassword(basicAuth.password, passwordHash);
+  if (!validPassword) {
+    recordFailedAttempt(id);
+    return c.json({ error: 'Invalid credentials' }, 401);
+  }
+
+  resetAuthAttempts(id);
+  return null;
+}
+
 pages.post('/:id', async (c) => {
   const id = c.req.param('id');
-  
-  // Get subdomain from header
+  const keyId = getSignedKey(c);
   const subdomainHeader = c.req.header('X-Subdomain');
   const subdomain = subdomainHeader ? subdomainHeader.toLowerCase() : undefined;
 
-  // Validate ID
   const idError = validateId(id);
   if (idError) {
     return c.json({ error: idError.message }, 400);
   }
 
-  // Validate subdomain if provided
   if (subdomain) {
     const subdomainValidation = validateSubdomainName(subdomain);
     if (!subdomainValidation.valid) {
       return c.json({ error: subdomainValidation.error }, 400);
     }
-    
-    // Check if subdomain exists
+
     const existingSubdomain = getSubdomain(subdomain);
     if (!existingSubdomain) {
       return c.json({ error: `Subdomain '${subdomain}' does not exist. Claim it first with POST /v1/subdomains/${subdomain}` }, 404);
     }
-    
-    // Check page count limit
-    if (existingSubdomain.page_count >= config.subdomains.maxPagesPerSubdomain) {
+
+    const canManageSubdomain = existingSubdomain.ownerKeyId === keyId || currentKeyCanOverride(c, 'subdomains:write:any');
+    if (!canManageSubdomain) {
+      return c.json({ error: 'This signing key does not control the requested subdomain' }, 403);
+    }
+
+    if (!getPage(id, subdomain) && existingSubdomain.page_count >= config.subdomains.maxPagesPerSubdomain) {
       return c.json({ error: `Subdomain '${subdomain}' has reached the maximum of ${config.subdomains.maxPagesPerSubdomain} pages` }, 403);
     }
   }
 
-  // Parse and validate body
   let body: CreatePageBody;
   try {
-    body = await c.req.json<CreatePageBody>();
+    const rawBody = c.get('rawBody') || await c.req.text();
+    body = JSON.parse(rawBody) as CreatePageBody;
   } catch {
     return c.json({ error: 'Invalid JSON body' }, 400);
   }
@@ -74,7 +125,6 @@ pages.post('/:id', async (c) => {
     return c.json({ error: bodyError.message }, 400);
   }
 
-  // Validate auth if provided
   if (body.auth) {
     const authError = validateAuthInput(body.auth);
     if (authError) {
@@ -82,185 +132,155 @@ pages.post('/:id', async (c) => {
     }
   }
 
-  // Check for existing page
   const existingPage = subdomain ? getPage(id, subdomain) : getPage(id);
-  
-  // For non-subdomain pages: require overwrite=true to replace
-  // For subdomain pages: allow update (ownership via subdomain claim)
-  if (existingPage && !subdomain) {
-    const overwrite = c.req.query('overwrite') === 'true';
-    if (!overwrite) {
-      return c.json({ error: `Page ID "${id}" is already taken. Use ?overwrite=true to replace.` }, 409);
+  if (existingPage) {
+    const sameOwner = existingPage.ownerKeyId === keyId;
+    const canOverride = currentKeyCanOverride(c, 'pages:update:any');
+
+    if (!existingPage.ownerKeyId && !canOverride) {
+      return c.json({ error: 'This page predates signed ownership and requires admin migration before it can be updated' }, 403);
     }
-    // For pages with auth, verify password before allowing overwrite
-    if (existingPage.auth?.passwordHash) {
-      const authHeader = c.req.header('Authorization');
-      const basicAuth = parseBasicAuth(authHeader);
-      
-      if (!basicAuth) {
-        c.header('WWW-Authenticate', `Basic realm="ZenBin-${id}"`);
-        return c.json({ error: 'Authentication required to overwrite this page' }, 401);
-      }
-      
-      const validPassword = await verifyPassword(basicAuth.password, existingPage.auth.passwordHash);
-      if (!validPassword) {
-        return c.json({ error: 'Invalid credentials' }, 401);
-      }
+
+    if (!sameOwner && !canOverride) {
+      return c.json({ error: 'This signing key does not own the page' }, 403);
     }
-  }
-  
-  if (existingPage && subdomain) {
-    // For subdomain pages, verify ownership via password if set
+
     if (existingPage.auth?.passwordHash) {
-      const authHeader = c.req.header('Authorization');
-      const basicAuth = parseBasicAuth(authHeader);
-      
-      if (!basicAuth) {
-        c.header('WWW-Authenticate', `Basic realm="ZenBin-${subdomain}-${id}"`);
-        return c.json({ error: 'Authentication required to update this page' }, 401);
-      }
-      
-      const validPassword = await verifyPassword(basicAuth.password, existingPage.auth.passwordHash);
-      if (!validPassword) {
-        return c.json({ error: 'Invalid credentials' }, 401);
+      const authError = await verifyPageWriteAuth(c, id, subdomain, existingPage.auth.passwordHash);
+      if (authError) {
+        return authError;
       }
     }
   }
 
-  // Decode HTML if given
   const decodedHtml = body.html ? decodeHtml(body.html, body.encoding) : undefined;
-
-  // Decode markdown if provided
-  const decodedMarkdown = body.markdown 
-    ? decodeMarkdown(body.markdown, body.markdown_encoding || body.encoding) 
+  const decodedMarkdown = body.markdown
+    ? decodeMarkdown(body.markdown, body.markdown_encoding || body.encoding)
     : undefined;
-
-  // Image is stored as base64 (validated already)
   const imageData = body.image;
 
-  // Handle video: decode base64 and save to filesystem
-  let videoPath: string | undefined;
-  if (body.video) {
-    const videoBuffer = Buffer.from(body.video, 'base64');
-    videoPath = await saveVideo(id, videoBuffer, body.content_type || 'video/mp4', subdomain);
-  }
+  const videoData = body.video;
 
-  // Generate ETag from combined content
-  const etagContent = (decodedHtml || '') + (decodedMarkdown || '') + (imageData || '') + (videoPath || '');
+  const etagContent = [
+    decodedHtml || '',
+    decodedMarkdown || '',
+    imageData || '',
+    videoData || '',
+    body.image_content_type || existingPage?.image_content_type || '',
+    body.video_content_type || existingPage?.video_content_type || '',
+  ].join('');
   const etag = generateEtag(etagContent);
 
-  // Process auth if provided
   let authData: { passwordHash?: string; urlTokenHash?: string } | undefined;
   let urlToken: string | undefined;
 
   if (body.auth) {
     authData = {};
-    
+
     if (body.auth.password) {
       authData.passwordHash = await hashPassword(body.auth.password);
     }
-    
+
     if (body.auth.urlToken) {
       const tokenResult = generateUrlToken();
       urlToken = tokenResult.token;
       authData.urlTokenHash = tokenResult.hash;
     }
+  } else if (existingPage?.auth) {
+    authData = existingPage.auth;
   }
 
-  // Save to database
   const { page, created } = await savePage(
     id,
     {
       html: decodedHtml,
       markdown: decodedMarkdown,
       image: imageData,
-      video: videoPath,
+      image_content_type: body.image_content_type,
+      video: videoData,
+      video_content_type: body.video_content_type,
       encoding: 'utf-8',
       content_type: body.content_type,
       title: body.title,
-      subdomain: subdomain,
+      subdomain,
       auth: authData,
+      ownerKeyId: keyId,
+      status: 'active',
     },
-    etag
+    etag,
   );
-  
-  // Increment subdomain page count if this is a new page
+
   if (created && subdomain) {
     incrementSubdomainPageCount(subdomain);
   }
 
-  // Build response URLs
   const baseUrl = config.baseUrl;
   const protocol = baseUrl.startsWith('https') ? 'https' : 'http';
   const domain = baseUrl.replace(/^https?:\/\//, '');
-  
-  let pageUrl: string;
-  if (subdomain) {
-    // Subdomain URL: https://{subdomain}.{domain}/{path}
-    const path = page.id === 'index' ? '/' : `/${page.id}`;
-    pageUrl = `${protocol}://${subdomain}.${domain}${path}`;
-  } else {
-    // Regular URL: https://{domain}/p/{id}
-    pageUrl = `${baseUrl}/p/${page.id}`;
-  }
-  
+  const subdomainPath = page.id === 'index' ? '/' : `/${page.id}`;
+  const subdomainOrigin = subdomain ? `${protocol}://${subdomain}.${domain}` : undefined;
+  const pageUrl = subdomain ? `${subdomainOrigin}${subdomainPath}` : `${baseUrl}/p/${page.id}`;
+
   const response: Record<string, string> = {
     id: page.id,
     url: pageUrl,
     etag: page.etag,
   };
-  
-  // Add subdomain info if applicable
+
   if (subdomain) {
     response.subdomain = subdomain;
-    response.path = page.id === 'index' ? '/' : `/${page.id}`;
-  }
-  
-  // Add raw URL
-  if (subdomain) {
-    response.raw_url = `${pageUrl}/raw`;
+    response.path = subdomainPath;
+    response.raw_url = `${subdomainOrigin}${subdomainPath === '/' ? '/raw' : `${subdomainPath}/raw`}`;
   } else {
     response.raw_url = `${baseUrl}/p/${page.id}/raw`;
   }
 
-  // Add markdown URL if markdown was provided
   if (page.markdown) {
-    if (subdomain) {
-      response.markdown_url = `${pageUrl}/md`;
-    } else {
-      response.markdown_url = `${baseUrl}/p/${page.id}/md`;
-    }
+    response.markdown_url = subdomain
+      ? `${subdomainOrigin}${subdomainPath === '/' ? '/md' : `${subdomainPath}/md`}`
+      : `${baseUrl}/p/${page.id}/md`;
   }
 
-  // Add secret URLs if token was generated
+  if (page.image) {
+    response.image_url = subdomain
+      ? `${subdomainOrigin}${subdomainPath === '/' ? '/image' : `${subdomainPath}/image`}`
+      : `${baseUrl}/p/${page.id}/image`;
+  }
+
+  if (page.video) {
+    response.video_url = subdomain
+      ? `${subdomainOrigin}${subdomainPath === '/' ? '/video' : `${subdomainPath}/video`}`
+      : `${baseUrl}/p/${page.id}/video`;
+  }
+
   if (urlToken) {
     response.secret_url = `${pageUrl}?token=${urlToken}`;
-    response.secret_raw_url = `${pageUrl}/raw?token=${urlToken}`;
-    if (page.markdown) {
-      response.secret_markdown_url = `${pageUrl}/md?token=${urlToken}`;
-    }
-  }
-
-  // Add image URL if image was provided
-  if (page.image) {
     if (subdomain) {
-      response.image_url = `${pageUrl}/image`;
+      response.secret_raw_url = `${subdomainOrigin}${subdomainPath === '/' ? '/raw' : `${subdomainPath}/raw`}?token=${urlToken}`;
+      if (page.markdown) {
+        response.secret_markdown_url = `${subdomainOrigin}${subdomainPath === '/' ? '/md' : `${subdomainPath}/md`}?token=${urlToken}`;
+      }
+      if (page.image) {
+        response.secret_image_url = `${subdomainOrigin}${subdomainPath === '/' ? '/image' : `${subdomainPath}/image`}?token=${urlToken}`;
+      }
+      if (page.video) {
+        response.secret_video_url = `${subdomainOrigin}${subdomainPath === '/' ? '/video' : `${subdomainPath}/video`}?token=${urlToken}`;
+      }
     } else {
-      response.image_url = `${baseUrl}/p/${page.id}/image`;
+      response.secret_raw_url = `${pageUrl}/raw?token=${urlToken}`;
+      if (page.markdown) {
+        response.secret_markdown_url = `${pageUrl}/md?token=${urlToken}`;
+      }
+      if (page.image) {
+        response.secret_image_url = `${pageUrl}/image?token=${urlToken}`;
+      }
+      if (page.video) {
+        response.secret_video_url = `${pageUrl}/video?token=${urlToken}`;
+      }
     }
   }
 
-  // Add video URL if video was provided
-  if (page.video) {
-    if (subdomain) {
-      response.video_url = `${pageUrl}/video`;
-    } else {
-      response.video_url = `${baseUrl}/p/${page.id}/video`;
-    }
-  }
-
-  // Track page creation or update
-  const contentSize = (decodedHtml?.length || 0) + (decodedMarkdown?.length || 0) + (imageData?.length || 0);
+  const contentSize = (decodedHtml?.length || 0) + (decodedMarkdown?.length || 0) + (imageData?.length || 0) + (body.video?.length || 0);
   if (created) {
     trackPageCreated({
       pageId: page.id,
@@ -282,7 +302,15 @@ pages.post('/:id', async (c) => {
     });
   }
 
-  // Track API call
+  await saveAuditLog({
+    action: created ? 'page_create' : 'page_update',
+    targetType: 'page',
+    keyId,
+    pageId: page.id,
+    subdomain,
+    status: 'accepted',
+  });
+
   trackApiCall({
     endpoint: '/v1/pages/:id',
     method: 'POST',
@@ -294,58 +322,58 @@ pages.post('/:id', async (c) => {
   return c.json(response, created ? 201 : 200);
 });
 
-// DELETE /v1/pages/:id - Delete a page
 pages.delete('/:id', async (c) => {
   const id = c.req.param('id');
+  const keyId = getSignedKey(c);
   const subdomainHeader = c.req.header('X-Subdomain');
   const subdomain = subdomainHeader ? subdomainHeader.toLowerCase() : undefined;
 
-  // Validate ID
   const idError = validateId(id);
   if (idError) {
     return c.json({ error: idError.message }, 400);
   }
 
-  // Get page
   const page = subdomain ? getPage(id, subdomain) : getPage(id);
   if (!page) {
     return c.json({ error: 'Page not found' }, 404);
   }
 
-  // If page has auth, verify password
-  if (page.auth?.passwordHash) {
-    const authHeader = c.req.header('Authorization');
-    const basicAuth = parseBasicAuth(authHeader);
-    const realm = subdomain ? `ZenBin-${subdomain}-${id}` : `ZenBin-${id}`;
-    
-    if (!basicAuth) {
-      c.header('WWW-Authenticate', `Basic realm="${realm}"`);
-      return c.json({ error: 'Authentication required to delete this page' }, 401);
+  const sameOwner = page.ownerKeyId === keyId;
+  const canOverride = currentKeyCanOverride(c, 'pages:delete:any');
+  if (!page.ownerKeyId && !canOverride) {
+    return c.json({ error: 'This page predates signed ownership and requires admin migration before it can be deleted' }, 403);
+  }
+  if (!sameOwner && !canOverride) {
+    return c.json({ error: 'This signing key does not own the page' }, 403);
+  }
+
+  if (subdomain) {
+    const parentSubdomain = getSubdomain(subdomain);
+    if (!parentSubdomain) {
+      return c.json({ error: `Subdomain '${subdomain}' not found` }, 404);
     }
-    
-    const validPassword = await verifyPassword(basicAuth.password, page.auth.passwordHash);
-    if (!validPassword) {
-      return c.json({ error: 'Invalid credentials' }, 401);
+    const canManageSubdomain = parentSubdomain.ownerKeyId === keyId || currentKeyCanOverride(c, 'subdomains:write:any');
+    if (!canManageSubdomain) {
+      return c.json({ error: 'This signing key does not control the requested subdomain' }, 403);
     }
   }
 
-  // Delete the page
+  if (page.auth?.passwordHash) {
+    const authError = await verifyPageWriteAuth(c, id, subdomain, page.auth.passwordHash);
+    if (authError) {
+      return authError;
+    }
+  }
+
   const deleted = await deletePageFromDb(id, subdomain);
   if (!deleted) {
     return c.json({ error: 'Failed to delete page' }, 500);
   }
 
-  // Delete video file if exists
-  if (page.video) {
-    await deleteVideo(page.video);
-  }
-
-  // Decrement subdomain page count if applicable
   if (subdomain) {
     decrementSubdomainPageCount(subdomain);
   }
 
-  // Track page deletion
   trackPageDeleted({
     pageId: id,
     subdomain,
@@ -353,7 +381,15 @@ pages.delete('/:id', async (c) => {
     contentType: page.content_type || 'text/html',
   });
 
-  // Track API call
+  await saveAuditLog({
+    action: 'page_delete',
+    targetType: 'page',
+    keyId,
+    pageId: id,
+    subdomain,
+    status: 'accepted',
+  });
+
   trackApiCall({
     endpoint: '/v1/pages/:id',
     method: 'DELETE',

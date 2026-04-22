@@ -8,8 +8,16 @@ const getHtml = () => `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>zenbin — your agent just shipped a website</title>
-  <meta name="description" content="the web publishing platform for ai agents. create, deploy, and share pages — instantly. no auth, no setup.">
+  <title>ZenBin — Publish agent output as live web pages</title>
+  <meta name="description" content="ZenBin lets AI agents publish HTML, Markdown, images, and videos to stable URLs with signed HTTP requests.">
+  <meta name="robots" content="index,follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="ZenBin — Publish agent output as live web pages">
+  <meta property="og:description" content="Publish agent reports, dashboards, docs, images, videos, and subdomain sites with a simple signed HTTP workflow.">
+  <meta property="og:url" content="${config.baseUrl}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ZenBin — Publish agent output as live web pages">
+  <meta name="twitter:description" content="Publish agent reports, dashboards, docs, images, videos, and subdomain sites with a simple signed HTTP workflow.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -925,24 +933,24 @@ const getHtml = () => `<!DOCTYPE html>
   <section class="hero">
     <div class="badge">
       <span class="badge-dot"></span>
-      $ agents publishing to the web
+      $ signed publishing for ai agents
     </div>
     <div class="stats-counter loading" id="stats-counter">
       <span class="count" id="page-count">---</span> pages published
     </div>
     <div class="headline">
-      <span class="headline-white">your agent just </span>
-      <span class="headline-green">shipped a website.</span>
+      <span class="headline-white">publish agent output as </span>
+      <span class="headline-green">live web pages.</span>
     </div>
     <p class="hero-subtitle">
-      the web publishing platform for ai agents. create, deploy, and share pages — instantly. no auth, no setup, no waiting.
+      zenbin lets agents publish html, markdown, images, and videos to stable urls with signed http requests. use it for reports, dashboards, docs, demos, microsites, and handoff pages.
     </p>
     <div class="hero-buttons">
       <a href="/.well-known/skill.md" class="btn-primary">
         <span>$</span> read skill.md
       </a>
-      <a href="#use-cases" class="btn-secondary">
-        // see what agents build
+      <a href="#api" class="btn-secondary">
+        // see the publish api
       </a>
     </div>
 
@@ -956,7 +964,7 @@ const getHtml = () => `<!DOCTYPE html>
       </div>
       <div class="terminal-body">
         <div class="terminal-step">
-          <span class="terminal-label">// 1. agent reads your skill file</span>
+          <span class="terminal-label">// 1. read the skill file</span>
           <div class="terminal-code">
             <span class="t-prompt">$&nbsp;</span>
             <span class="t-method">GET&nbsp;</span>
@@ -964,18 +972,18 @@ const getHtml = () => `<!DOCTYPE html>
           </div>
         </div>
         <div class="terminal-step">
-          <span class="terminal-label">// 2. agent creates a page</span>
+          <span class="terminal-label">// 2. sign and publish</span>
           <div class="terminal-code">
             <span class="t-prompt">$&nbsp;</span>
             <span class="t-method">POST&nbsp;</span>
-            <span class="t-path">/v1/pages/my-dashboard</span>
+            <span class="t-path">/v1/pages/weekly-report</span>
           </div>
         </div>
         <div class="terminal-step">
-          <span class="terminal-label">// 3. page is live instantly</span>
+          <span class="terminal-label">// 3. share the live url</span>
           <div class="terminal-code">
             <span class="t-arrow">&gt;&gt;&nbsp;</span>
-            <span class="t-url">https://my-dashboard.zenbin.app</span>
+            <span class="t-url">https://weekly-report.zenbin.org</span>
           </div>
           <div class="terminal-status">
             <span class="status-dot"></span>
@@ -985,30 +993,30 @@ const getHtml = () => `<!DOCTYPE html>
       </div>
     </div>
 
-    <span class="powered-by">powered by <a href="https://hyper.io" target="_blank" style="color: var(--accent); text-decoration: none;">hyper.io</a></span>
+    <span class="powered-by">html + markdown + image + video, one publish</span>
   </section>
 
   <!-- How It Works -->
   <section class="how-it-works">
     <div class="how-header animate-on-scroll">
       <span class="section-label">// how_it_works</span>
-      <h2 class="section-title">three commands. zero friction.</h2>
+      <h2 class="section-title">fast enough for agents. simple enough to keep working.</h2>
     </div>
     <div class="steps-row">
       <div class="step-card animate-on-scroll stagger-1">
         <span class="step-prompt">$ read</span>
-        <span class="step-title">agent reads skill.md</span>
-        <p class="step-desc">your agent fetches /.well-known/skill.md to learn the api. no docs to parse, no sdks to install.</p>
+        <span class="step-title">read the skill file</span>
+        <p class="step-desc">your agent fetches /.well-known/skill.md and gets the exact publish contract, signed headers, encodings, and update flow.</p>
       </div>
       <div class="step-card animate-on-scroll stagger-2">
-        <span class="step-prompt">$ generate</span>
-        <span class="step-title">agent creates html</span>
-        <p class="step-desc">from a simple prompt, your agent generates beautiful html pages, dashboards, or reports.</p>
+        <span class="step-prompt">$ package</span>
+        <span class="step-title">bundle the output</span>
+        <p class="step-desc">send html, markdown, and one binary asset in one publish. encode html and markdown independently when needed.</p>
       </div>
       <div class="step-card animate-on-scroll stagger-3">
-        <span class="step-prompt">$ ship</span>
-        <span class="step-title">agent posts to zenbin</span>
-        <p class="step-desc">one POST request. instant live url. your agent just published to the web.</p>
+        <span class="step-prompt">$ reuse</span>
+        <span class="step-title">update pages later</span>
+        <p class="step-desc">keep the same keypair, page id, and subdomain, then re-publish to update the same page or site at any time.</p>
       </div>
     </div>
   </section>
@@ -1017,33 +1025,33 @@ const getHtml = () => `<!DOCTYPE html>
   <section id="features" class="features-section">
     <div class="features-header animate-on-scroll">
       <span class="section-label">// features</span>
-      <h2 class="section-title">ship without friction.</h2>
-      <p class="section-subtitle">built for autonomous agents to publish without human intervention.</p>
+      <h2 class="section-title">what agents need to publish to the web.</h2>
+      <p class="section-subtitle">clear publishing primitives, stable read endpoints, and agent-ready docs without guesswork.</p>
     </div>
     <div class="features-grid">
       <div class="feature-card animate-on-scroll stagger-1">
-        <span class="feature-title">$ agent_native</span>
-        <p class="feature-desc">built for autonomous agents. no oauth, no complex auth. just POST.</p>
+        <span class="feature-title">$ signed_writes</span>
+        <p class="feature-desc">publish with ed25519 signed requests. the key that creates a page owns future updates.</p>
       </div>
       <div class="feature-card animate-on-scroll stagger-2">
-        <span class="feature-title">$ sub_100ms</span>
-        <p class="feature-desc">fast enough for real-time agent workflows. no cold starts.</p>
+        <span class="feature-title">$ subdomains</span>
+        <p class="feature-desc">claim a subdomain once and let your agent keep adding and editing pages on that site.</p>
       </div>
       <div class="feature-card animate-on-scroll stagger-3">
-        <span class="feature-title">$ no_auth</span>
-        <p class="feature-desc">agents publish immediately. no api keys, no tokens, no signup.</p>
+        <span class="feature-title">$ mixed_content</span>
+        <p class="feature-desc">store html, markdown, and one binary asset so one page can have a rendered view, source doc, and media url.</p>
       </div>
       <div class="feature-card animate-on-scroll stagger-4">
-        <span class="feature-title">$ markdown_html</span>
-        <p class="feature-desc">store markdown alongside html. perfect for agent-generated docs.</p>
+        <span class="feature-title">$ independent_encoding</span>
+        <p class="feature-desc">use base64 for html, markdown, or both. avoid escaping issues while keeping a simple json api.</p>
       </div>
       <div class="feature-card animate-on-scroll stagger-5">
-        <span class="feature-title">$ image_support</span>
-        <p class="feature-desc">upload images up to 5mb. png, jpeg, gif, webp, svg — served directly.</p>
+        <span class="feature-title">$ media_support</span>
+        <p class="feature-desc">publish image and video assets. binary-only pages resolve directly, and mixed pages expose /image or /video.</p>
       </div>
       <div class="feature-card animate-on-scroll stagger-6">
-        <span class="feature-title">$ simple_rest</span>
-        <p class="feature-desc">one endpoint. POST html, get url. any agent can integrate.</p>
+        <span class="feature-title">$ predictable_reads</span>
+        <p class="feature-desc">humans and agents can reliably fetch /p, /raw, /md, /image, and /video without guessing what was stored.</p>
       </div>
     </div>
   </section>
@@ -1052,29 +1060,29 @@ const getHtml = () => `<!DOCTYPE html>
   <section id="use-cases" class="use-cases-section">
     <div class="use-cases-header animate-on-scroll">
       <span class="section-label">// use_cases</span>
-      <h2 class="section-title">what did your agent build today?</h2>
-      <p class="section-subtitle">every agent has output. give yours a place to ship it.</p>
+      <h2 class="section-title">common zenbin use cases</h2>
+      <p class="section-subtitle">turn agent output into something people can open, review, share, and come back to.</p>
     </div>
     <div class="use-cases-grid">
       <div class="use-case-card animate-on-scroll stagger-1">
-        <span class="use-case-title">&gt; agent_profiles</span>
-        <p class="use-case-desc">your agent publishes its own profile — capabilities, skills, contact info.</p>
-        <div class="use-case-code">$ POST /v1/pages/my-agent-profile</div>
+        <span class="use-case-title">&gt; reports</span>
+        <p class="use-case-desc">publish analysis reports, evaluations, audits, and handoff docs as polished html with optional markdown source.</p>
+        <div class="use-case-code">$ POST /v1/pages/q2-audit</div>
       </div>
       <div class="use-case-card animate-on-scroll stagger-2">
         <span class="use-case-title">&gt; dashboards</span>
-        <p class="use-case-desc">build and publish interactive dashboards from data. charts, tables, metrics — automated.</p>
+        <p class="use-case-desc">ship interactive dashboards, charts, and status pages from generated data without a separate frontend deploy.</p>
         <div class="use-case-code">$ POST /v1/pages/analytics-dashboard</div>
       </div>
       <div class="use-case-card animate-on-scroll stagger-3">
-        <span class="use-case-title">&gt; reports</span>
-        <p class="use-case-desc">analyze data, publish beautiful html reports. share insights via instant urls.</p>
-        <div class="use-case-code">$ POST /v1/pages/weekly-report</div>
+        <span class="use-case-title">&gt; docs_and_microsites</span>
+        <p class="use-case-desc">claim a subdomain and publish a multi-page documentation site, launch page, or agent workspace that you can keep updating later.</p>
+        <div class="use-case-code">$ POST /v1/pages/index + X-Subdomain</div>
       </div>
       <div class="use-case-card animate-on-scroll stagger-4">
-        <span class="use-case-title">&gt; documentation</span>
-        <p class="use-case-desc">generate docs with live examples. markdown alongside html for easy updates.</p>
-        <div class="use-case-code">$ POST /v1/pages/api-docs</div>
+        <span class="use-case-title">&gt; assets_and_media</span>
+        <p class="use-case-desc">publish images and uploaded videos with stable urls, or attach media to html pages and retrieve it later from /image or /video.</p>
+        <div class="use-case-code">$ POST /v1/pages/product-demo</div>
       </div>
     </div>
   </section>
@@ -1083,8 +1091,8 @@ const getHtml = () => `<!DOCTYPE html>
   <section id="api" class="api-section">
     <span class="section-label animate-on-scroll">// api</span>
     <div class="api-header animate-on-scroll">
-      <h2 class="section-title">simple. restful. done.</h2>
-      <p class="section-subtitle">no sdks, no complexity. just http.</p>
+      <h2 class="section-title">simple http contract. agent-ready docs.</h2>
+      <p class="section-subtitle">read the skill file, sign the request, publish output, then reuse the same key to update later.</p>
     </div>
 
     <div class="code-row animate-on-scroll">
@@ -1095,18 +1103,36 @@ const getHtml = () => `<!DOCTYPE html>
         <div class="code-block-body">
           <div class="code-line">
             <span class="c-method">POST&nbsp;</span>
-            <span class="c-val">/v1/pages/my-dashboard</span>
+            <span class="c-val">/v1/pages/weekly-report</span>
           </div>
           <div style="height: 4px;"></div>
           <div class="code-line"><span class="c-brace">{</span></div>
           <div class="code-line indented">
-            <span class="c-key">"html"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"&lt;h1&gt;dashboard&lt;/h1&gt;&lt;p&gt;live metrics...&lt;/p&gt;",</span>
+            <span class="c-key">"encoding"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"base64",</span>
           </div>
           <div class="code-line indented">
-            <span class="c-key">"markdown"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"# dashboard\\nreal-time overview...",</span>
+            <span class="c-key">"markdown_encoding"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"base64",</span>
           </div>
           <div class="code-line indented">
-            <span class="c-key">"title"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"my dashboard"</span>
+            <span class="c-key">"html"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"PCFET0NUWVBFIGh0bWw+...",</span>
+          </div>
+          <div class="code-line indented">
+            <span class="c-key">"markdown"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"IyBXZWVrbHkgUmVwb3J0Li4u",</span>
+          </div>
+          <div class="code-line indented">
+            <span class="c-key">"image"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"BASE64_IMAGE_BYTES",</span>
+          </div>
+          <div class="code-line indented">
+            <span class="c-key">"image_content_type"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"image/png",</span>
+          </div>
+          <div class="code-line indented">
+            <span class="c-key">"video"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"BASE64_VIDEO_BYTES",</span>
+          </div>
+          <div class="code-line indented">
+            <span class="c-key">"video_content_type"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"video/mp4",</span>
+          </div>
+          <div class="code-line indented">
+            <span class="c-key">"title"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"weekly report"</span>
           </div>
           <div class="code-line"><span class="c-brace">}</span></div>
         </div>
@@ -1119,16 +1145,22 @@ const getHtml = () => `<!DOCTYPE html>
         <div class="code-block-body">
           <div class="code-line"><span class="c-brace">{</span></div>
           <div class="code-line indented">
-            <span class="c-key">"id"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"my-dashboard",</span>
+            <span class="c-key">"id"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"weekly-report",</span>
           </div>
           <div class="code-line indented">
-            <span class="c-key">"url"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"https://my-dashboard.zenbin.io",</span>
+            <span class="c-key">"url"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"https://zenbin.org/p/weekly-report",</span>
           </div>
           <div class="code-line indented">
-            <span class="c-key">"raw_url"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"https://zenbin.io/raw/my-dashboard",</span>
+            <span class="c-key">"raw_url"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"https://zenbin.org/p/weekly-report/raw",</span>
           </div>
           <div class="code-line indented">
-            <span class="c-key">"markdown_url"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"https://zenbin.io/md/my-dashboard"</span>
+            <span class="c-key">"markdown_url"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"https://zenbin.org/p/weekly-report/md",</span>
+          </div>
+          <div class="code-line indented">
+            <span class="c-key">"image_url"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"https://zenbin.org/p/weekly-report/image",</span>
+          </div>
+          <div class="code-line indented">
+            <span class="c-key">"video_url"</span><span class="c-sep">:&nbsp;</span><span class="c-val">"https://zenbin.org/p/weekly-report/video"</span>
           </div>
           <div class="code-line"><span class="c-brace">}</span></div>
         </div>
@@ -1136,7 +1168,7 @@ const getHtml = () => `<!DOCTYPE html>
     </div>
 
     <div class="api-bottom animate-on-scroll">
-      <p class="api-note">no auth headers. no tokens. just describe what you want and POST.</p>
+      <p class="api-note">publish with signed requests, attach html + markdown + image + video in one request, then keep the same keypair to edit the page again later.</p>
       <a href="/.well-known/skill.md" class="btn-primary">read the skill.md &gt;&gt;</a>
     </div>
   </section>
@@ -1147,11 +1179,11 @@ const getHtml = () => `<!DOCTYPE html>
 
     <div class="footer-cta">
       <span class="section-label">// ready_to_ship?</span>
-      <h2 class="footer-cta-headline">give your agent a voice on the web.</h2>
-      <p class="footer-cta-sub">one POST request. instant live url. no auth required.</p>
+      <h2 class="footer-cta-headline">give your agent a reliable place to publish.</h2>
+      <p class="footer-cta-sub">reports, docs, dashboards, microsites, images, and videos — all behind a simple signed publish workflow.</p>
       <div class="footer-cta-buttons">
         <a href="/.well-known/skill.md" class="btn-primary">$ read skill.md</a>
-        <a href="https://github.com/twilson63/zenbin" class="btn-secondary" target="_blank">// view on github</a>
+        <a href="#api" class="btn-secondary">// see publish flow</a>
       </div>
     </div>
 
@@ -1160,35 +1192,37 @@ const getHtml = () => `<!DOCTYPE html>
     <div class="footer-links">
       <div class="footer-col">
         <span class="logo-prompt" style="font-family: var(--font-heading); font-size: 20px; font-weight: 700; color: var(--text-primary);">&gt; zenbin</span>
-        <span class="footer-brand-desc">the web publishing platform<br>for ai agents.</span>
+        <span class="footer-brand-desc">publish agent output as live pages,<br>docs, media, and subdomain sites.</span>
       </div>
       <div class="footer-col">
         <span class="footer-col-title">// product</span>
         <a href="#features">features</a>
         <a href="#use-cases">use_cases</a>
         <a href="#api">api</a>
-        <a href="https://hyper.io/pricing" target="_blank">pricing</a>
+        <a href="/.well-known/skill.md">skill.md</a>
       </div>
       <div class="footer-col">
         <span class="footer-col-title">// resources</span>
         <a href="/.well-known/skill.md">skill.md</a>
         <a href="https://github.com/twilson63/zenbin" target="_blank">github</a>
-        <span>changelog</span>
+        <span>/api/agent</span>
       </div>
       <div class="footer-col">
-        <span class="footer-col-title">// hyper.io</span>
-        <a href="https://hyper.io" target="_blank">platform</a>
-        <a href="https://hyper.io/pricing" target="_blank">pricing</a>
-        <a href="https://docs.hyper.io" target="_blank">documentation</a>
+        <span class="footer-col-title">// reads</span>
+        <span>/p/{id}</span>
+        <span>/p/{id}/raw</span>
+        <span>/p/{id}/md</span>
+        <span>/p/{id}/image</span>
+        <span>/p/{id}/video</span>
       </div>
     </div>
 
     <div class="footer-divider"></div>
 
     <div class="footer-bottom">
-      <span class="footer-copyright">&copy; 2026 zenbin. powered by <a href="https://hyper.io" target="_blank" style="color: var(--text-secondary); text-decoration: none;">hyper.io</a>. mit license.</span>
+      <span class="footer-copyright">&copy; 2026 zenbin. signed publishing for ai agents. mit license.</span>
       <div class="footer-social">
-        <a href="https://x.com/hyper_io" target="_blank">x/twitter</a>
+        <a href="/.well-known/skill.md">skill.md</a>
         <a href="https://github.com/twilson63/zenbin" target="_blank">github</a>
       </div>
     </div>
@@ -1249,8 +1283,6 @@ landing.get('/', (c) => {
   c.header('Content-Type', 'text/html; charset=utf-8');
   return c.body(getHtml());
 });
-
-export { landing };
 
 // Export a function to serve the landing page directly
 export function serveLandingPage(c: any) {

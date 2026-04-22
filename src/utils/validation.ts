@@ -30,7 +30,30 @@ export function validateId(id: string): ValidationError | null {
 }
 
 /**
- * Validate request body for creating/updating a page
+ * Validate request body for creating/updating a page.
+ *
+ * Supported publish combinations:
+ * - html only
+ * - markdown only
+ * - image only
+ * - video only
+ * - image + video
+ * - html + markdown
+ * - html + image
+ * - html + video
+ * - html + image + video
+ * - markdown + image
+ * - markdown + video
+ * - markdown + image + video
+ * - html + markdown + image
+ * - html + markdown + video
+ * - html + markdown + image + video
+ *
+ * Encoding rules:
+ * - `encoding` applies to html
+ * - `markdown_encoding` applies to markdown
+ * - image is always base64
+ * - video is always base64
  */
 export function validatePageBody(body: unknown): ValidationError | null {
   if (!body || typeof body !== 'object') {
@@ -95,9 +118,9 @@ export function validatePageBody(body: unknown): ValidationError | null {
       return { field: 'image', message: 'Invalid base64 encoding for image' };
     }
     if (imageSize > config.maxImageSize) {
-      return { 
-        field: 'image', 
-        message: `Image size exceeds maximum of ${config.maxImageSize} bytes` 
+      return {
+        field: 'image',
+        message: `Image size exceeds maximum of ${config.maxImageSize} bytes`
       };
     }
   }
@@ -115,9 +138,9 @@ export function validatePageBody(body: unknown): ValidationError | null {
       return { field: 'video', message: 'Invalid base64 encoding for video' };
     }
     if (videoSize > config.maxVideoSize) {
-      return { 
-        field: 'video', 
-        message: `Video size exceeds maximum of ${config.maxVideoSize} bytes (${Math.round(config.maxVideoSize / 1024 / 1024)}MB)` 
+      return {
+        field: 'video',
+        message: `Video size exceeds maximum of ${config.maxVideoSize} bytes`
       };
     }
   }
@@ -126,46 +149,46 @@ export function validatePageBody(body: unknown): ValidationError | null {
   if (!data.html && !data.markdown && !data.image && !data.video) {
     return { field: 'body', message: 'At least one of html, markdown, image, or video is required' };
   }
-
-  // For image-only pages, validate content_type is an image type
-  const isImagePage = data.image && !data.html && !data.markdown && !data.video;
-  if (isImagePage) {
-    const contentType = data.content_type as string | undefined;
-    if (!contentType) {
-      return { field: 'content_type', message: 'content_type is required for image pages' };
-    }
-    if (typeof contentType !== 'string') {
-      return { field: 'content_type', message: 'content_type must be a string' };
-    }
-    if (!(config.allowedImageTypes as readonly string[]).includes(contentType)) {
-      return { 
-        field: 'content_type', 
-        message: `content_type must be one of: ${config.allowedImageTypes.join(', ')}` 
-      };
-    }
-  }
-
-  // For video-only pages, validate content_type is a video type
-  const isVideoPage = data.video && !data.html && !data.markdown && !data.image;
-  if (isVideoPage) {
-    const contentType = data.content_type as string | undefined;
-    if (!contentType) {
-      return { field: 'content_type', message: 'content_type is required for video pages' };
-    }
-    if (typeof contentType !== 'string') {
-      return { field: 'content_type', message: 'content_type must be a string' };
-    }
-    if (!(config.allowedVideoTypes as readonly string[]).includes(contentType)) {
-      return { 
-        field: 'content_type', 
-        message: `content_type must be one of: ${config.allowedVideoTypes.join(', ')}` 
-      };
-    }
-  }
-
-  // If both html/markdown and image are provided, content_type must still be valid
   if (data.content_type !== undefined && typeof data.content_type !== 'string') {
     return { field: 'content_type', message: 'content_type must be a string' };
+  }
+  if (data.image_content_type !== undefined && typeof data.image_content_type !== 'string') {
+    return { field: 'image_content_type', message: 'image_content_type must be a string' };
+  }
+  if (data.video_content_type !== undefined && typeof data.video_content_type !== 'string') {
+    return { field: 'video_content_type', message: 'video_content_type must be a string' };
+  }
+
+  const contentType = data.content_type as string | undefined;
+  const imageContentType = (data.image_content_type as string | undefined) || (data.image ? contentType : undefined);
+  const videoContentType = (data.video_content_type as string | undefined) || (data.video ? contentType : undefined);
+
+  if (data.image) {
+    if (!imageContentType) {
+      return { field: 'image_content_type', message: 'image_content_type is required when image is provided unless content_type is used as a legacy fallback' };
+    }
+    if (!(config.allowedImageTypes as readonly string[]).includes(imageContentType)) {
+      return {
+        field: data.image_content_type !== undefined ? 'image_content_type' : 'content_type',
+        message: `image content type must be one of: ${config.allowedImageTypes.join(', ')}`
+      };
+    }
+  }
+
+  if (data.video) {
+    if (!videoContentType) {
+      return { field: 'video_content_type', message: 'video_content_type is required when video is provided unless content_type is used as a legacy fallback' };
+    }
+    if (!(config.allowedVideoTypes as readonly string[]).includes(videoContentType)) {
+      return {
+        field: data.video_content_type !== undefined ? 'video_content_type' : 'content_type',
+        message: `video content type must be one of: ${config.allowedVideoTypes.join(', ')}`
+      };
+    }
+  }
+
+  if (data.image && data.video && !data.image_content_type && !data.video_content_type && contentType) {
+    return { field: 'body', message: 'When both image and video are provided, specify image_content_type and video_content_type so each asset has its own MIME type' };
   }
 
   // Check combined size for html/markdown
@@ -229,7 +252,7 @@ export function validateAuthInput(auth: unknown): ValidationError | null {
 }
 
 /**
- * Decode HTML content from request body
+ * Decode stored HTML input into a utf-8 string before persistence.
  */
 export function decodeHtml(html: string, encoding: 'utf-8' | 'base64' = 'utf-8'): string {
   if (encoding === 'base64') {
@@ -239,7 +262,7 @@ export function decodeHtml(html: string, encoding: 'utf-8' | 'base64' = 'utf-8')
 }
 
 /**
- * Decode markdown content from request body
+ * Decode stored markdown input into a utf-8 string before persistence.
  */
 export function decodeMarkdown(markdown: string, encoding: 'utf-8' | 'base64' = 'utf-8'): string {
   if (encoding === 'base64') {

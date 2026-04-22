@@ -8,7 +8,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node -r dotenv/config dist/index.js",
-    "test": "vitest"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "html",
@@ -19,19 +21,19 @@
   "license": "MIT",
   "dependencies": {
     "@hono/node-server": "^1.13.7",
-    "@types/jsonwebtoken": "^9.0.5",
-    "@types/node": "^22.10.2",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "hono": "^4.6.12",
     "jsonwebtoken": "^9.0.2",
     "lmdb": "^3.1.5",
-    "posthog-node": "^5.26.0",
-    "typescript": "^5.7.2"
+    "posthog-node": "^5.26.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/node": "^22.10.2",
     "tsx": "^4.21.0",
+    "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
   "engines": {
