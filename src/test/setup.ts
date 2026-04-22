@@ -6,6 +6,7 @@ const TEST_DB_PATH = './data/test.lmdb';
 const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
 
 beforeAll(() => {
+  process.env.NODE_ENV = 'test';
   // Clean up any existing test database
   for (const suffix of TEST_DB_SUFFIXES) {
     try {

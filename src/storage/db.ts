@@ -226,7 +226,7 @@ export async function savePage(
     status: data.status || existing?.status || 'active',
   };
 
-  await pagesDb.put(key, page);
+  pagesDb.putSync(key, page);
 
   return {
     page,
@@ -245,7 +245,7 @@ export async function deletePage(id: string, subdomain?: string): Promise<boolea
   if (!existing) {
     return false;
   }
-  await pagesDb.remove(key);
+  pagesDb.removeSync(key);
   return true;
 }
 
@@ -282,7 +282,7 @@ export async function saveSubdomain(name: string, ownerKeyId?: string): Promise<
     ownerKeyId: existing?.ownerKeyId || ownerKeyId,
   };
 
-  await getSubdomainDatabase().put(name, subdomain);
+  getSubdomainDatabase().putSync(name, subdomain);
 
   return {
     subdomain,
@@ -304,11 +304,11 @@ export async function deleteSubdomain(name: string): Promise<boolean> {
   const prefix = `${name}:`;
   for (const key of pagesDb.getKeys({ start: prefix })) {
     if (key.startsWith(prefix)) {
-      await pagesDb.remove(key);
+      pagesDb.removeSync(key);
     }
   }
 
-  await getSubdomainDatabase().remove(name);
+  getSubdomainDatabase().removeSync(name);
   return true;
 }
 
@@ -355,7 +355,7 @@ export async function saveAgentKey(input: {
     revoked_at: existing?.revoked_at,
   };
 
-  await getAgentKeyDatabase().put(input.keyId, record);
+  getAgentKeyDatabase().putSync(input.keyId, record);
   return record;
 }
 
@@ -394,7 +394,7 @@ export async function updateAgentKeyStatus(
     revoked_at: status === 'revoked' ? now : existing.revoked_at,
   };
 
-  await getAgentKeyDatabase().put(keyId, updated);
+  getAgentKeyDatabase().putSync(keyId, updated);
   return updated;
 }
 
@@ -404,7 +404,7 @@ export async function touchAgentKey(keyId: string): Promise<void> {
     return;
   }
 
-  await getAgentKeyDatabase().put(keyId, {
+  getAgentKeyDatabase().putSync(keyId, {
     ...existing,
     last_seen_at: nowIso(),
     updated_at: nowIso(),
@@ -420,7 +420,7 @@ export async function registerUsedNonce(keyId: string, nonce: string, expiresAt:
     if (new Date(existing.expires_at).getTime() > now.getTime()) {
       return false;
     }
-    await getNonceDatabase().remove(nonceKey);
+    getNonceDatabase().removeSync(nonceKey);
   }
 
   const record: NonceRecord = {
@@ -431,7 +431,7 @@ export async function registerUsedNonce(keyId: string, nonce: string, expiresAt:
     expires_at: expiresAt,
   };
 
-  await getNonceDatabase().put(nonceKey, record);
+  getNonceDatabase().putSync(nonceKey, record);
   return true;
 }
 
@@ -447,7 +447,7 @@ export async function saveAuditLog(record: Omit<AuditLogRecord, 'id' | 'created_
     return stored;
   }
 
-  await getAuditLogDatabase().put(id, stored);
+  getAuditLogDatabase().putSync(id, stored);
   return stored;
 }
 

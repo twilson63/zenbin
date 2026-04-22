@@ -6,9 +6,11 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts'],
     testTimeout: 10000,
+    fileParallelism: false,
     setupFiles: ['./src/test/setup.ts'],
     env: {
       BASE_URL: 'http://localhost:3000',
+      NODE_ENV: 'test',
     },
   },
 });
