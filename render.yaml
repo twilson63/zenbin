@@ -18,6 +18,8 @@ services:
         value: https://zenbin.org
       - key: LMDB_PATH
         value: /var/data/zenbin.lmdb
+      - key: VIDEO_STORAGE_PATH
+        value: /var/data/videos
       - key: MAX_PAYLOAD_SIZE
         value: 524288
       - key: RATE_LIMIT_WINDOW_MS
