@@ -1,3 +1,4 @@
+import { promises as fs } from 'fs';
 import { Hono, Context, Next } from 'hono';
 import { config } from '../config.js';
 import { getPage, getSubdomain } from '../storage/db.js';
@@ -5,6 +6,7 @@ import { validateId } from '../utils/validation.js';
 import { generateEtag, etagMatches } from '../utils/etag.js';
 import { verifyPassword, verifyUrlToken, parseBasicAuth } from '../utils/auth.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
+import { getVideoMimeType, getVideoPath, videoExists } from '../storage/video.js';
 import type { Page } from '../storage/db.js';
 
 // Type for context variables
@@ -48,6 +50,25 @@ function buildBinaryResponse(c: Context, bodyBase64: string, contentType: string
   c.header('ETag', etag);
   c.header('Cache-Control', 'public, max-age=0, must-revalidate');
   return c.body(buffer);
+}
+
+async function buildStoredVideoResponse(c: Context, page: Page) {
+  if (!page.video || !videoExists(page.video)) {
+    return c.json({ error: 'Video file not found' }, 404);
+  }
+
+  const filePath = getVideoPath(page.video);
+  const stats = await fs.stat(filePath);
+  const etag = generateEtag(`${page.video}:${stats.size}:${stats.mtimeMs}`);
+  const ifNoneMatch = c.req.header('If-None-Match');
+  if (etagMatches(ifNoneMatch, etag)) {
+    return c.body(null, 304);
+  }
+
+  c.header('Content-Type', getVideoContentType(page) || getVideoMimeType(page.video));
+  c.header('ETag', etag);
+  c.header('Cache-Control', 'public, max-age=0, must-revalidate');
+  return c.body(await fs.readFile(filePath));
 }
 
 // Security headers for sandboxed rendering
@@ -438,7 +459,7 @@ subdomainRender.get('/*', async (c) => {
     if (!page.video) {
       return c.json({ error: 'Page has no video content' }, 404);
     }
-    return buildBinaryResponse(c, page.video, getVideoContentType(page));
+    return buildStoredVideoResponse(c, page);
   }
 
   // Check Accept header for markdown
@@ -478,7 +499,7 @@ subdomainRender.get('/*', async (c) => {
   }
 
   if (page.video && !page.html) {
-    return buildBinaryResponse(c, page.video, getVideoContentType(page));
+    return buildStoredVideoResponse(c, page);
   }
 
   // Check If-None-Match for caching HTML
@@ -646,7 +667,7 @@ subdomainRender.get('/*/video', extractSubdomain, async (c) => {
     return c.json({ error: 'Page has no video content' }, 404);
   }
 
-  return buildBinaryResponse(c, page.video, getVideoContentType(page));
+  return buildStoredVideoResponse(c, page);
 });
 
 export { subdomainRender };
@@ -697,7 +718,7 @@ export async function serveSubdomainPage(c: any, subdomain: string, path: string
   }
 
   if (page.video && !page.html) {
-    return buildBinaryResponse(c, page.video, getVideoContentType(page));
+    return buildStoredVideoResponse(c, page);
   }
   
   // Check If-None-Match for caching

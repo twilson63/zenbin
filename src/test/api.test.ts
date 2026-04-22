@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { pages } from '../routes/pages.js';
 import { render } from '../routes/render.js';
-import { initDatabase, closeDatabase } from '../storage/db.js';
-import { rmSync } from 'fs';
+import { initDatabase, closeDatabase, getPage } from '../storage/db.js';
+import { existsSync, rmSync } from 'fs';
 import { createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
 import { adminKeys } from '../routes/adminKeys.js';
 import { config } from '../config.js';
@@ -121,7 +121,7 @@ describe('POST /v1/pages/:id', () => {
     expect(res.status).toBe(201);
   });
 
-  it('should create a video-only page and serve it from /p/:id', async () => {
+  it('should create a video-only page, store it on disk, and serve it from /p/:id', async () => {
     const pageId = uniqueId('video-page');
     const videoBase64 = Buffer.from('fake-video-bytes').toString('base64');
 
@@ -136,6 +136,12 @@ describe('POST /v1/pages/:id', () => {
     }));
 
     expect(publishRes.status).toBe(201);
+
+    const storedPage = getPage(pageId);
+    expect(storedPage?.video).toBeDefined();
+    expect(storedPage?.video).toContain(`${pageId}.mp4`);
+    expect(storedPage?.video).not.toBe(videoBase64);
+    expect(existsSync(`${config.videoStoragePath}/${storedPage?.video}`)).toBe(true);
 
     const readRes = await app.request(`/p/${pageId}`);
     expect(readRes.status).toBe(200);

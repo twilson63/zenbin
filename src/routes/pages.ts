@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
 import { hasScope, requireSignedAgent } from '../middleware/signedAgent.js';
 import { decrementSubdomainPageCount, deletePage as deletePageFromDb, getPage, getSubdomain, incrementSubdomainPageCount, saveAuditLog, savePage } from '../storage/db.js';
+import { deleteVideo, saveVideo } from '../storage/video.js';
 import { generateEtag } from '../utils/etag.js';
 import { generateUrlToken, hashPassword, parseBasicAuth, verifyPassword } from '../utils/auth.js';
 import { decodeHtml, decodeMarkdown, validateAuthInput, validateId, validatePageBody } from '../utils/validation.js';
@@ -159,13 +160,23 @@ pages.post('/:id', async (c) => {
     : undefined;
   const imageData = body.image;
 
-  const videoData = body.video;
+  let videoPath: string | undefined;
+  if (body.video) {
+    const videoMimeType = body.video_content_type || body.content_type || existingPage?.video_content_type || existingPage?.content_type || 'video/mp4';
+    const videoBuffer = Buffer.from(body.video, 'base64');
+    videoPath = await saveVideo(id, videoBuffer, videoMimeType, subdomain);
+    if (existingPage?.video && existingPage.video !== videoPath) {
+      await deleteVideo(existingPage.video);
+    }
+  } else if (existingPage?.video) {
+    await deleteVideo(existingPage.video);
+  }
 
   const etagContent = [
     decodedHtml || '',
     decodedMarkdown || '',
     imageData || '',
-    videoData || '',
+    videoPath || '',
     body.image_content_type || existingPage?.image_content_type || '',
     body.video_content_type || existingPage?.video_content_type || '',
   ].join('');
@@ -197,7 +208,7 @@ pages.post('/:id', async (c) => {
       markdown: decodedMarkdown,
       image: imageData,
       image_content_type: body.image_content_type,
-      video: videoData,
+      video: videoPath,
       video_content_type: body.video_content_type,
       encoding: 'utf-8',
       content_type: body.content_type,
@@ -368,6 +379,10 @@ pages.delete('/:id', async (c) => {
   const deleted = await deletePageFromDb(id, subdomain);
   if (!deleted) {
     return c.json({ error: 'Failed to delete page' }, 500);
+  }
+
+  if (page.video) {
+    await deleteVideo(page.video);
   }
 
   if (subdomain) {

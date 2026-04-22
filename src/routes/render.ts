@@ -1,3 +1,4 @@
+import { promises as fs } from 'fs';
 import { Hono, Context } from 'hono';
 import { getPage } from '../storage/db.js';
 import { validateId } from '../utils/validation.js';
@@ -6,6 +7,7 @@ import { verifyPassword, verifyUrlToken, parseBasicAuth } from '../utils/auth.js
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
 import { trackPageView } from '../analytics/posthog.js';
 import { injectPostHog, shouldInjectPostHog } from '../utils/posthog-inject.js';
+import { getVideoMimeType, getVideoPath, videoExists } from '../storage/video.js';
 import type { Page } from '../storage/db.js';
 
 const render = new Hono();
@@ -23,6 +25,26 @@ function getImageContentType(page: Page): string {
 
 function getVideoContentType(page: Page): string {
   return page.video_content_type || (page.video ? page.content_type : '') || 'application/octet-stream';
+}
+
+async function serveStoredVideo(c: Context, page: Page, filename: string) {
+  if (!page.video || !videoExists(page.video)) {
+    return c.json({ error: 'Video file not found' }, 404);
+  }
+
+  const filePath = getVideoPath(page.video);
+  const stats = await fs.stat(filePath);
+  const etag = generateEtag(`${page.video}:${stats.size}:${stats.mtimeMs}`);
+  const ifNoneMatch = c.req.header('If-None-Match');
+  if (etagMatches(ifNoneMatch, etag)) {
+    return c.body(null, 304);
+  }
+
+  c.header('Content-Type', getVideoContentType(page) || getVideoMimeType(page.video));
+  c.header('Content-Disposition', `inline; filename="${filename}"`);
+  c.header('ETag', etag);
+  c.header('Cache-Control', 'public, max-age=0, must-revalidate');
+  return c.body(await fs.readFile(filePath));
 }
 
 function serveBinary(c: Context, bodyBase64: string, contentType: string, filename: string) {
@@ -168,7 +190,7 @@ render.get('/:id', async (c) => {
 
   if (page.video && !page.html) {
     trackRequestView(c, id);
-    return serveBinary(c, page.video, getVideoContentType(page), id);
+    return serveStoredVideo(c, page, id);
   }
 
   const ifNoneMatch = c.req.header('If-None-Match');
@@ -240,7 +262,7 @@ render.get('/:id/video', async (c) => {
   }
 
   trackRequestView(c, id);
-  return serveBinary(c, page.video, getVideoContentType(page), id);
+  return serveStoredVideo(c, page, id);
 });
 
 render.get('/:id/md', async (c) => {
