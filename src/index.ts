@@ -209,6 +209,7 @@ Endpoints:
   GET  /                        - Landing page
   GET  /robots.txt              - Robots.txt for crawlers
   GET  /.well-known/skill.md    - Agent instructions
+  GET  /.well-known/register.md - Agent key registration + signing guide
   GET  /v1/stats                - Site statistics
   GET  /v1/admin/keys           - List signing keys (admin)
   POST /v1/admin/keys          - Register signing key (admin)
@@ -224,6 +225,7 @@ Endpoints:
   GET  /p/{id}/video            - Stream video content (with Range support)
   GET  /{path} (subdomain)      - Render subdomain page
   GET  /api/agent               - Agent instructions (markdown)
+  GET  /api/agent/register      - Agent key registration + signing guide
   POST /api/proxy               - Proxy external requests (CORS bypass)
   GET  /health                  - Health check
 

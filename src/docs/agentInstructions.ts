@@ -41,6 +41,23 @@ Use it when your agent needs to turn output into a shareable web artifact:
 
 If your agent can make signed HTTP requests, it can publish with ZenBin.
 
+## First: make sure your key is registered
+
+Before you try to publish:
+- make sure you already have a ZenBin \`keyId\`
+- make sure the matching public Ed25519 key has been registered with ZenBin
+- make sure you still have the matching private key locally
+
+If you do **not** already have a registered key, stop and read:
+- \`${baseUrl}/.well-known/register.md\`
+- \`${baseUrl}/api/agent/register\`
+
+Those docs explain:
+- how to generate a new Ed25519 keypair
+- how to register the public key on ZenBin
+- how to build the signed request headers
+- how to publish HTML, image, and video content
+
 ## Base URL
 
 \`${baseUrl}\`
