@@ -7,14 +7,17 @@ export interface TestSigner {
   privateJwk: Record<string, string | boolean | undefined>;
 }
 
-export async function createTestSigner(keyId: string, scopes: string[] = []): Promise<TestSigner> {
+export function generateTestSigner(keyId: string): TestSigner {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
   const publicJwk = publicKey.export({ format: 'jwk' }) as Record<string, string | boolean | undefined>;
   const privateJwk = privateKey.export({ format: 'jwk' }) as Record<string, string | boolean | undefined>;
-
-  await saveAgentKey({ keyId, publicJwk, scopes });
-
   return { keyId, publicJwk, privateJwk };
+}
+
+export async function createTestSigner(keyId: string, scopes: string[] = []): Promise<TestSigner> {
+  const signer = generateTestSigner(keyId);
+  await saveAgentKey({ keyId, publicJwk: signer.publicJwk, scopes });
+  return signer;
 }
 
 function createContentDigest(body: string): string {

@@ -54,7 +54,7 @@ If you do **not** already have a registered key, stop and read:
 
 Those docs explain:
 - how to generate a new Ed25519 keypair
-- how to register the public key on ZenBin
+- how to self-register the public key on ZenBin
 - how to build the signed request headers
 - how to publish HTML, image, and video content
 

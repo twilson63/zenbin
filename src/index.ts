@@ -20,6 +20,7 @@ import { initAnalytics, closeAnalytics, trackError } from './analytics/posthog.j
 import { serveLandingPage } from './routes/landing.js';
 import { serveSubdomainPage } from './routes/subdomainRender.js';
 import { adminKeys } from './routes/adminKeys.js';
+import { keys } from './routes/keys.js';
 
 // Type for context variables
 type Variables = {
@@ -100,6 +101,7 @@ app.get('/health', (c) => {
 app.route('/v1/pages', pages);
 app.route('/v1/subdomains', subdomains);
 app.route('/v1/stats', stats);
+app.route('/v1/keys', keys);
 app.route('/v1/admin/keys', adminKeys);
 
 // Agent instructions
@@ -211,6 +213,7 @@ Endpoints:
   GET  /.well-known/skill.md    - Agent instructions
   GET  /.well-known/register.md - Agent key registration + signing guide
   GET  /v1/stats                - Site statistics
+  POST /v1/keys/register        - Self-register signing key
   GET  /v1/admin/keys           - List signing keys (admin)
   POST /v1/admin/keys          - Register signing key (admin)
   POST /v1/subdomains/{name}    - Claim a subdomain

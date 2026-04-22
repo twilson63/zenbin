@@ -4,8 +4,9 @@ import { pages } from '../routes/pages.js';
 import { render } from '../routes/render.js';
 import { initDatabase, closeDatabase, getPage } from '../storage/db.js';
 import { existsSync, rmSync } from 'fs';
-import { createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
+import { createTestSigner, generateTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
 import { adminKeys } from '../routes/adminKeys.js';
+import { keys } from '../routes/keys.js';
 import { config } from '../config.js';
 
 const TEST_DB_PATH = './data/test-api.lmdb';
@@ -15,6 +16,7 @@ const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit']
 const app = new Hono();
 app.route('/v1/pages', pages);
 app.route('/p', render);
+app.route('/v1/keys', keys);
 app.route('/v1/admin/keys', adminKeys);
 
 // Generate unique IDs for each test run
@@ -46,6 +48,71 @@ afterAll(async () => {
       rmSync(`${TEST_DB_PATH}${suffix}`, { recursive: true, force: true });
     } catch { /* ignore */ }
   }
+});
+
+describe('POST /v1/keys/register', () => {
+  it('should allow self-registration of an Ed25519 public key', async () => {
+    const keyId = uniqueId('self-register');
+    const signerMaterial = generateTestSigner(keyId);
+
+    const res = await app.request('/v1/keys/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        keyId,
+        publicJwk: signerMaterial.publicJwk,
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const payload = await res.json() as { keyId: string; status: string; scopes: string[] };
+    expect(payload.keyId).toBe(keyId);
+    expect(payload.status).toBe('active');
+    expect(payload.scopes).toEqual([]);
+  });
+
+  it('should allow a self-registered key to publish content', async () => {
+    const keyId = uniqueId('self-publish');
+    const signerMaterial = generateTestSigner(keyId);
+
+    const registerRes = await app.request('/v1/keys/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        keyId,
+        publicJwk: signerMaterial.publicJwk,
+      }),
+    });
+    expect(registerRes.status).toBe(201);
+
+    const pageId = uniqueId('self-registered-page');
+    const publishRes = await app.request(`/v1/pages/${pageId}`, {
+      ...jsonSignedRequest({
+        signer: signerMaterial,
+        method: 'POST',
+        path: `/v1/pages/${pageId}`,
+        body: {
+          html: '<h1>Self Registered</h1>',
+          title: 'Self Registered',
+        },
+      }),
+    });
+
+    expect(publishRes.status).toBe(201);
+  });
+
+  it('should reject invalid public JWKs', async () => {
+    const res = await app.request('/v1/keys/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        keyId: uniqueId('bad-key'),
+        publicJwk: { kty: 'RSA' },
+      }),
+    });
+
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('POST /v1/pages/:id', () => {

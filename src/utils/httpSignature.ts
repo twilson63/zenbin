@@ -50,6 +50,22 @@ export function verifyBodyDigest(body: string, contentDigest: string): boolean {
   return createContentDigest(body) === contentDigest;
 }
 
+export function validateEd25519PublicJwk(publicJwk: StoredJwk): boolean {
+  if (publicJwk.kty !== 'OKP' || publicJwk.crv !== 'Ed25519' || typeof publicJwk.x !== 'string') {
+    return false;
+  }
+
+  try {
+    createPublicKey({
+      key: publicJwk,
+      format: 'jwk',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function verifyEd25519Signature(input: {
   publicJwk: StoredJwk;
   canonical: string;

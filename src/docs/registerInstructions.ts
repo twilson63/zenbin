@@ -63,13 +63,15 @@ Expected key shapes:
 
 ## Step 2: Register the public key on ZenBin
 
-Admin endpoint:
+Self-service endpoint:
 
 \`\`\`
-POST ${baseUrl}/v1/admin/keys
+POST ${baseUrl}/v1/keys/register
 \`\`\`
 
-This endpoint requires admin authorization.
+This endpoint does not require an admin token for normal publishing keys.
+It creates an active signing key with default scopes:
+- \`[]\`
 
 ### Request body
 
@@ -80,25 +82,22 @@ This endpoint requires admin authorization.
     "crv": "Ed25519",
     "kty": "OKP",
     "x": "PUBLIC_KEY_X"
-  },
-  "scopes": []
+  }
 }
 \`\`\`
 
 ### curl example
 
 \`\`\`bash
-curl -X POST ${baseUrl}/v1/admin/keys \\
+curl -X POST ${baseUrl}/v1/keys/register \\
   -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \\
   -d '{
     "keyId": "agent-key-1713810000000",
     "publicJwk": {
       "crv": "Ed25519",
       "kty": "OKP",
       "x": "PUBLIC_KEY_X"
-    },
-    "scopes": []
+    }
   }'
 \`\`\`
 
