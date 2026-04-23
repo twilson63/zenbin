@@ -16,6 +16,15 @@ type Variables = {
 
 const subdomainRender = new Hono<{ Variables: Variables }>();
 
+subdomainRender.use('*', async (c, next) => {
+  const url = new URL(c.req.url);
+  const normalizedPath = url.pathname.replace(/\/{2,}/g, '/');
+  if (normalizedPath !== url.pathname) {
+    return c.redirect(`${normalizedPath}${url.search}`, 307);
+  }
+  await next();
+});
+
 function getDocumentContentType(page: Page): string {
   if (page.html && (page.content_type?.startsWith('image/') || page.content_type?.startsWith('video/'))) {
     return 'text/html; charset=utf-8';
@@ -681,8 +690,18 @@ export async function serveSubdomainPage(c: any, subdomain: string, path: string
     return c.body(getNonExistentSubdomainPage(subdomain), 404);
   }
   
-  // Get the path (normalize to page ID)
-  const pageId = buildSubdomainPageId(path);
+  // Detect explicit asset/source suffixes before normal page rendering.
+  let explicitView: 'raw' | 'md' | 'image' | 'video' | null = null;
+  let pageLookupPath = path;
+  for (const suffix of ['/raw', '/md', '/image', '/video'] as const) {
+    if (path === suffix || path.endsWith(suffix)) {
+      explicitView = suffix.slice(1) as 'raw' | 'md' | 'image' | 'video';
+      pageLookupPath = path.slice(0, -suffix.length) || '/';
+      break;
+    }
+  }
+
+  const pageId = buildSubdomainPageId(pageLookupPath);
   
   // Validate page ID
   const idError = validateId(pageId);
@@ -711,6 +730,46 @@ export async function serveSubdomainPage(c: any, subdomain: string, path: string
   const authResponse = await verifyPageAuth(c, page);
   if (authResponse) {
     return authResponse;
+  }
+
+  if (explicitView === 'raw') {
+    const ifNoneMatch = c.req.header('If-None-Match');
+    if (etagMatches(ifNoneMatch, page.etag)) {
+      return c.body(null, 304);
+    }
+    c.header('Content-Type', 'text/plain; charset=utf-8');
+    c.header('ETag', page.etag);
+    c.header('Cache-Control', 'public, max-age=0, must-revalidate');
+    return c.body(page.html);
+  }
+
+  if (explicitView === 'md') {
+    if (!page.markdown) {
+      return c.json({ error: 'Page has no markdown content' }, 404);
+    }
+    const mdEtag = generateEtag(page.markdown);
+    const ifNoneMatch = c.req.header('If-None-Match');
+    if (etagMatches(ifNoneMatch, mdEtag)) {
+      return c.body(null, 304);
+    }
+    c.header('Content-Type', 'text/markdown; charset=utf-8');
+    c.header('ETag', mdEtag);
+    c.header('Cache-Control', 'public, max-age=0, must-revalidate');
+    return c.body(page.markdown);
+  }
+
+  if (explicitView === 'image') {
+    if (!page.image) {
+      return c.json({ error: 'Page has no image content' }, 404);
+    }
+    return buildBinaryResponse(c, page.image, getImageContentType(page));
+  }
+
+  if (explicitView === 'video') {
+    if (!page.video) {
+      return c.json({ error: 'Page has no video content' }, 404);
+    }
+    return buildStoredVideoResponse(c, page);
   }
   
   if (page.image && !page.html) {

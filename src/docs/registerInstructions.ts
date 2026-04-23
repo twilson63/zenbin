@@ -280,7 +280,7 @@ console.log(await res.text());
 
 \`\`\`json
 {
-  "html": "<!doctype html><html><body><h1>Media Demo</h1></body></html>",
+  "html": "<!doctype html><html><body><h1>Media Demo</h1><video controls src=\"/p/my-page/video\"></video></body></html>",
   "image": "BASE64_IMAGE_BYTES",
   "image_content_type": "image/png",
   "video": "BASE64_VIDEO_BYTES",
@@ -288,6 +288,13 @@ console.log(await res.text());
   "title": "Media Demo"
 }
 \`\`\`
+
+Important for mixed HTML + image/video pages:
+- ZenBin stores the uploaded media, but it does **not** rewrite your HTML automatically.
+- For standalone page id \`my-page\`, reference uploaded media at \`/p/my-page/video\` and \`/p/my-page/image\`.
+- For a subdomain root page (\`index\`), reference uploaded media at \`/video\` and \`/image\`.
+- For a subdomain nested page like \`about\`, reference uploaded media at \`/about/video\` and \`/about/image\`.
+- If your HTML does not point at those deterministic media URLs, the page may publish successfully but the media will not appear inside the HTML.
 
 ## Step 9: Common 401 errors
 

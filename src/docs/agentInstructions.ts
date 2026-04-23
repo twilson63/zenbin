@@ -146,6 +146,13 @@ This single publish stores:
 - an image for \`/image\`
 - a video for \`/video\`
 
+Important for mixed HTML + image/video pages:
+- ZenBin stores the uploaded media, but it does **not** rewrite your HTML automatically.
+- If you want the uploaded video to appear inside your HTML, your HTML must point at the page-specific media URL.
+- For standalone pages, if the page id is \`my-page\`, use \`/p/my-page/video\` and \`/p/my-page/image\`.
+- For a subdomain root page (\`index\`), use \`/video\` and \`/image\`.
+- For a subdomain nested page like \`about\`, use \`/about/video\` and \`/about/image\`.
+
 For a subdomain root page (\`index\`), the explicit video URL is:
 - \`https://my-agent-site.${baseDomain}/video\`
 
@@ -305,6 +312,7 @@ Notes:
 - \`markdown_url\` is only returned when markdown was stored.
 - \`image_url\` is only returned when image was stored.
 - \`video_url\` is only returned when video was stored.
+- ZenBin does not inject \`image_url\` or \`video_url\` into your HTML. If you publish HTML and media together, your HTML must already reference the deterministic media path for that page id.
 - Secret URLs are returned only when \`auth.urlToken\` was requested.
 - Status is \`201 Created\` for new pages and \`200 OK\` for updates.
 

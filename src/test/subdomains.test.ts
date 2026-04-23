@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { pages } from '../routes/pages.js';
 import { subdomains } from '../routes/subdomains.js';
-import { subdomainRender } from '../routes/subdomainRender.js';
+import { serveSubdomainPage, subdomainRender } from '../routes/subdomainRender.js';
 import { stats } from '../routes/stats.js';
 import { render } from '../routes/render.js';
 import { initDatabase, closeDatabase } from '../storage/db.js';
@@ -29,6 +29,12 @@ app.route('/v1/subdomains', subdomains);
 app.route('/v1/stats', stats);
 app.route('/p', render);
 
+const prodLikeApp = new Hono<{ Variables: Variables }>();
+prodLikeApp.route('/v1/pages', pages);
+prodLikeApp.route('/v1/subdomains', subdomains);
+prodLikeApp.route('/v1/stats', stats);
+prodLikeApp.route('/p', render);
+
 // Subdomain detection middleware for testing (not needed for API tests, but useful for subdomain render)
 app.use('*', async (c, next) => {
   const host = c.req.header('host') || '';
@@ -42,7 +48,33 @@ app.use('*', async (c, next) => {
   }
   await next();
 });
+prodLikeApp.use('*', async (c, next) => {
+  const host = c.req.header('host') || '';
+  const parts = host.split('.');
+  if (parts.length >= 3) {
+    const potentialSubdomain = parts[0].toLowerCase();
+    const reserved = new Set(config.subdomains.reservedNames);
+    if (!reserved.has(potentialSubdomain) && potentialSubdomain !== 'www') {
+      c.set('subdomain', potentialSubdomain);
+    }
+  }
+  await next();
+});
 app.route('/', subdomainRender);
+prodLikeApp.get('/', async (c) => {
+  const subdomain = c.get('subdomain');
+  if (subdomain) {
+    return serveSubdomainPage(c, subdomain, '/');
+  }
+  return c.json({ error: 'Not found' }, 404);
+});
+prodLikeApp.get('/*', async (c) => {
+  const subdomain = c.get('subdomain');
+  if (subdomain) {
+    return serveSubdomainPage(c, subdomain, c.req.path);
+  }
+  return c.json({ error: 'Not found' }, 404);
+});
 
 beforeAll(async () => {
   for (const suffix of TEST_DB_SUFFIXES) {
@@ -240,6 +272,64 @@ describe('Subdomains', () => {
       expect(videoRes.status).toBe(200);
       expect(videoRes.headers.get('content-type')).toContain('video/mp4');
       expect(await videoRes.text()).toBe('subdomain-video');
+    });
+
+    it('should normalize double-slash root video paths on subdomains', async () => {
+      const name = uniqueId('video-root-site');
+      await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
+
+      const publishRes = await app.request('/v1/pages/index', {
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: '/v1/pages/index',
+          headers: { 'X-Subdomain': name },
+          body: {
+            html: '<h1>Home</h1>',
+            video: Buffer.from('subdomain-video-double-slash').toString('base64'),
+            content_type: 'video/mp4',
+          },
+        }),
+      });
+
+      expect(publishRes.status).toBe(201);
+
+      const redirected = await app.request(`https://${name}.${config.subdomains.baseDomain}//video`, {
+        redirect: 'manual',
+        headers: { host: `${name}.${config.subdomains.baseDomain}` },
+      });
+      expect(redirected.status).toBe(307);
+      expect(redirected.headers.get('location')).toBe('/video');
+    });
+
+    it('should serve nested video endpoints in the production-style subdomain handler', async () => {
+      const name = uniqueId('prod-video-site');
+      await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
+
+      const publishRes = await app.request('/v1/pages/intro', {
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: '/v1/pages/intro',
+          headers: { 'X-Subdomain': name },
+          body: {
+            html: '<h1>Intro</h1>',
+            video: Buffer.from('nested-intro-video').toString('base64'),
+            video_content_type: 'video/mp4',
+          },
+        }),
+      });
+
+      expect(publishRes.status).toBe(201);
+      const payload = await publishRes.json() as { video_url: string };
+      expect(payload.video_url).toContain('/intro/video');
+
+      const videoRes = await prodLikeApp.request('/intro/video', {
+        headers: { host: `${name}.${config.subdomains.baseDomain}` },
+      });
+      expect(videoRes.status).toBe(200);
+      expect(videoRes.headers.get('content-type')).toContain('video/mp4');
+      expect(await videoRes.text()).toBe('nested-intro-video');
     });
 
     it('should support both image and video on the same subdomain page', async () => {
