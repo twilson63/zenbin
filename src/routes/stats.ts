@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { getPageCount, getSubdomainCount } from '../storage/db.js';
+import { getAgentKeyCount, getPageCount, getSubdomainCount } from '../storage/db.js';
 
 const stats = new Hono();
 
@@ -7,10 +7,12 @@ const stats = new Hono();
 stats.get('/', async (c) => {
   const pageCount = await getPageCount();
   const subdomainCount = await getSubdomainCount();
+  const agentCount = getAgentKeyCount('active');
   
   return c.json({
     pages: pageCount,
     subdomains: subdomainCount,
+    agents: agentCount,
   });
 });
 

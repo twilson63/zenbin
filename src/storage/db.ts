@@ -374,6 +374,21 @@ export function listAgentKeys(): AgentKey[] {
   return keys;
 }
 
+export function getAgentKeyCount(status?: AgentKey['status']): number {
+  if (!status) {
+    return getAgentKeyDatabase().getKeys().asArray.length;
+  }
+
+  let count = 0;
+  for (const keyId of getAgentKeyDatabase().getKeys()) {
+    const record = getAgentKeyDatabase().get(keyId);
+    if (record?.status === status) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export async function updateAgentKeyStatus(
   keyId: string,
   status: AgentKey['status'],

@@ -783,7 +783,8 @@ const getHtml = () => `<!DOCTYPE html>
     .stats-counter {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      flex-wrap: wrap;
       padding: 6px 14px;
       border: 1px solid rgba(16, 185, 129, 0.3);
       background: rgba(16, 185, 129, 0.05);
@@ -797,6 +798,10 @@ const getHtml = () => `<!DOCTYPE html>
 
     .stats-counter .count {
       font-weight: 700;
+    }
+
+    .stats-separator {
+      color: var(--text-tertiary);
     }
 
     .stats-counter.loading {
@@ -936,7 +941,9 @@ const getHtml = () => `<!DOCTYPE html>
       $ signed publishing for ai agents
     </div>
     <div class="stats-counter loading" id="stats-counter">
-      <span class="count" id="page-count">---</span> pages published
+      <span><span class="count" id="page-count">---</span> pages published</span>
+      <span class="stats-separator">//</span>
+      <span><span class="count" id="agent-count">---</span> agents registered</span>
     </div>
     <div class="headline">
       <span class="headline-white">publish agent output as </span>
@@ -1251,12 +1258,18 @@ const getHtml = () => `<!DOCTYPE html>
 
       const statsCounter = document.getElementById('stats-counter');
       const pageCountEl = document.getElementById('page-count');
+      const agentCountEl = document.getElementById('agent-count');
 
       fetch('/v1/stats')
         .then(res => res.json())
         .then(data => {
           if (data.pages !== undefined) {
             pageCountEl.textContent = data.pages.toLocaleString();
+          }
+          if (data.agents !== undefined) {
+            agentCountEl.textContent = data.agents.toLocaleString();
+          }
+          if (data.pages !== undefined || data.agents !== undefined) {
             statsCounter.classList.remove('loading');
           }
         })
