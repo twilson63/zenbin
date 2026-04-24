@@ -33,4 +33,4 @@ services:
     disk:
       name: zenbin-data
       mountPath: /var/data
-      sizeGB: 1
+      sizeGB: 5
