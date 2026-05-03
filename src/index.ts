@@ -186,6 +186,14 @@ async function main() {
     console.log('Initializing analytics...');
     initAnalytics();
 
+    // Security warnings for missing secrets
+    if (!process.env.ZENBIN_JWT_SECRET) {
+      console.warn('[ZenBin] WARNING: ZENBIN_JWT_SECRET is not set. JWT-based API key verification is disabled.');
+    }
+    if (!process.env.ADMIN_TOKEN) {
+      console.warn('[ZenBin] WARNING: ADMIN_TOKEN is not set. Admin API routes are disabled.');
+    }
+
     const server = serve({
       fetch: app.fetch,
       port: config.port,

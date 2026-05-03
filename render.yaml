@@ -27,7 +27,9 @@ services:
       - key: RATE_LIMIT_MAX_REQUESTS
         value: 100
       - key: ZENBIN_JWT_SECRET
-        value: change-me-in-production
+        sync: false
+      - key: ADMIN_TOKEN
+        sync: false
       - key: SUBDOMAIN_BASE_DOMAIN
         value: zenbin.org
     disk:

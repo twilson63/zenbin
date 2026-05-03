@@ -5,8 +5,11 @@ import { Context, Next } from 'hono';
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 
-// Environment variable - must match portal's ZENBIN_JWT_SECRET
-const ZENBIN_JWT_SECRET = process.env.ZENBIN_JWT_SECRET || 'change-me-in-production';
+// JWT secret must be configured via ZENBIN_JWT_SECRET environment variable.
+// If not set, JWT-based API key verification is disabled and requests fall through
+// to the free tier handler. This is intentional — the primary auth model is
+// Ed25519 signed requests, not JWT.
+const ZENBIN_JWT_SECRET = process.env.ZENBIN_JWT_SECRET || '';
 
 // In-memory usage tracking (replace with Redis for production)
 const freeUsage = new Map<string, { count: number; resetTime: number }>();
