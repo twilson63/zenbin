@@ -86,7 +86,7 @@ async function changeKeyStatus(
     return c.json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const keyId = c.req.param('keyId');
+  const keyId = c.req.param('keyId')!;
   const updated = await updateAgentKeyStatus(keyId, status, body.reason);
 
   if (!updated) {
