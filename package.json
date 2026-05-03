@@ -6,10 +6,10 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "npx tsc",
     "start": "node -r dotenv/config dist/index.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "npx vitest run",
+    "test:watch": "npx vitest",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
