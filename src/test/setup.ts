@@ -20,6 +20,7 @@ beforeAll(() => {
   // Set test database path
   process.env.LMDB_PATH = TEST_DB_PATH;
   process.env.VIDEO_STORAGE_PATH = TEST_VIDEO_PATH;
+  process.env.ADMIN_TOKEN = 'test-admin-token';
 
   try {
     rmSync(TEST_VIDEO_PATH, { recursive: true, force: true });

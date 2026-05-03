@@ -64,8 +64,10 @@ export const config = {
     nonceTtlMs: parseInt(process.env.SIGNED_PUBLISHING_NONCE_TTL_MS || '300000', 10),
   },
 
-  admin: {
-    token: process.env.ADMIN_TOKEN || 'dev-admin-token',
+  get admin() {
+    return {
+      token: process.env.ADMIN_TOKEN || '',
+    };
   },
 
   // Analytics
