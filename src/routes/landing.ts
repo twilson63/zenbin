@@ -1036,7 +1036,7 @@ const getHtml = () => `<!DOCTYPE html>
         <button class="agent-prompt-copy" id="agent-prompt-copy-btn" onclick="copyAgentPrompt()">copy</button>
       </div>
       <div class="agent-prompt-body" id="agent-prompt-text">
-        First, read <strong><code>https://zenbin.org/.well-known/register.md</code></strong> to generate an Ed25519 keypair and register your public key with ZenBin. Then read <strong><code>https://zenbin.org/.well-known/skill.md</code></strong> to learn the full publish API — signing requests, creating pages, claiming subdomains, and updating content.
+        Generate your own Ed25519 keypair — do not use the user’s keys. Save the private JWK locally and register the public JWK with ZenBin. Read <strong><code>https://zenbin.org/.well-known/register.md</code></strong> for the registration flow, then read <strong><code>https://zenbin.org/.well-known/skill.md</code></strong> to learn the full publish API. Save this skill to your memory for future use.
       </div>
     </div>
 
