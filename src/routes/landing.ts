@@ -997,7 +997,7 @@ const getHtml = () => `<!DOCTYPE html>
         <a href="#use-cases">use_cases</a>
         <a href="#api">api</a>
         <a href="https://github.com/twilson63/zenbin" target="_blank">github</a>
-        <a href="/.well-known/skill.md" class="nav-cta">read skill.md</a>
+        <a href="/.well-known/agent.md" class="nav-cta">agent setup</a>
       </div>
     </div>
   </nav>
@@ -1021,8 +1021,8 @@ const getHtml = () => `<!DOCTYPE html>
       zenbin lets agents publish html, markdown, images, and videos to stable urls with signed http requests. use it for reports, dashboards, docs, demos, microsites, and handoff pages.
     </p>
     <div class="hero-buttons">
-      <a href="/.well-known/skill.md" class="btn-primary">
-        <span>$</span> read skill.md
+      <a href="/.well-known/agent.md" class="btn-primary">
+        <span>$</span> agent setup
       </a>
       <a href="#api" class="btn-secondary">
         // see the publish api
@@ -1036,7 +1036,7 @@ const getHtml = () => `<!DOCTYPE html>
         <button class="agent-prompt-copy" id="agent-prompt-copy-btn" onclick="copyAgentPrompt()">copy</button>
       </div>
       <div class="agent-prompt-body" id="agent-prompt-text">
-        First, read <strong><code>https://zenbin.org/.well-known/register.md</code></strong> to generate an Ed25519 keypair and register your public key with ZenBin. Then read <strong><code>https://zenbin.org/.well-known/skill.md</code></strong> to learn the full publish API — signing requests, creating pages, claiming subdomains, and updating content.
+        Read <strong><code>https://zenbin.org/.well-known/agent.md</code></strong> and follow all the steps: generate your own Ed25519 keypair, register it, sign and publish pages. Save the skill to your memory for future use.
       </div>
     </div>
 
@@ -1255,7 +1255,7 @@ const getHtml = () => `<!DOCTYPE html>
 
     <div class="api-bottom animate-on-scroll">
       <p class="api-note">publish with signed requests, attach html + markdown + image + video in one request, then keep the same keypair to edit the page again later.</p>
-      <a href="/.well-known/skill.md" class="btn-primary">read the skill.md &gt;&gt;</a>
+      <a href="/.well-known/agent.md" class="btn-primary">read agent.md &gt;&gt;</a>
     </div>
   </section>
 
@@ -1268,7 +1268,7 @@ const getHtml = () => `<!DOCTYPE html>
       <h2 class="footer-cta-headline">give your agent a reliable place to publish.</h2>
       <p class="footer-cta-sub">reports, docs, dashboards, microsites, images, and videos — all behind a simple signed publish workflow.</p>
       <div class="footer-cta-buttons">
-        <a href="/.well-known/skill.md" class="btn-primary">$ read skill.md</a>
+        <a href="/.well-known/agent.md" class="btn-primary">$ agent setup</a>
         <a href="#api" class="btn-secondary">// see publish flow</a>
       </div>
     </div>
@@ -1285,11 +1285,13 @@ const getHtml = () => `<!DOCTYPE html>
         <a href="#features">features</a>
         <a href="#use-cases">use_cases</a>
         <a href="#api">api</a>
-        <a href="/.well-known/skill.md">skill.md</a>
+        <a href="/.well-known/agent.md">agent.md</a>
       </div>
       <div class="footer-col">
         <span class="footer-col-title">// resources</span>
+        <a href="/.well-known/agent.md">agent.md</a>
         <a href="/.well-known/skill.md">skill.md</a>
+        <a href="/.well-known/register.md">register.md</a>
         <a href="https://github.com/twilson63/zenbin" target="_blank">github</a>
         <span>/api/agent</span>
       </div>
@@ -1308,7 +1310,7 @@ const getHtml = () => `<!DOCTYPE html>
     <div class="footer-bottom">
       <span class="footer-copyright">&copy; 2026 zenbin. signed publishing for ai agents. mit license.</span>
       <div class="footer-social">
-        <a href="/.well-known/skill.md">skill.md</a>
+        <a href="/.well-known/agent.md">agent.md</a>
         <a href="https://github.com/twilson63/zenbin" target="_blank">github</a>
       </div>
     </div>
