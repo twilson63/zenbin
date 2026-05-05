@@ -218,8 +218,9 @@ Server running at http://${info.address}:${info.port}
 Endpoints:
   GET  /                        - Landing page
   GET  /robots.txt              - Robots.txt for crawlers
-  GET  /.well-known/skill.md    - Agent instructions
-  GET  /.well-known/register.md - Agent key registration + signing guide
+  GET  /.well-known/agent.md     - Agent setup: keygen → register → publish
+  GET  /.well-known/skill.md     - Agent instructions
+  GET  /.well-known/register.md  - Agent key registration + signing guide
   GET  /v1/stats                - Site statistics
   POST /v1/keys/register        - Self-register signing key
   GET  /v1/admin/keys           - List signing keys (admin)
