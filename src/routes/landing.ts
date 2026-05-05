@@ -395,6 +395,74 @@ const getHtml = () => `<!DOCTYPE html>
       z-index: 1;
     }
 
+    /* ── Agent Prompt Box ── */
+    .agent-prompt-box {
+      width: 100%;
+      max-width: 720px;
+      background: var(--bg-card);
+      border: 1px solid var(--accent);
+      animation: fadeInUp 0.5s ease-out 0.55s both;
+      position: relative;
+      z-index: 1;
+    }
+
+    .agent-prompt-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .agent-prompt-label {
+      font-family: var(--font-heading);
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .agent-prompt-copy {
+      font-family: var(--font-heading);
+      font-size: 11px;
+      color: var(--text-tertiary);
+      background: none;
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .agent-prompt-copy:hover {
+      color: var(--text-primary);
+      border-color: var(--text-secondary);
+    }
+
+    .agent-prompt-copy.copied {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .agent-prompt-body {
+      padding: 16px 20px;
+      font-family: var(--font-body);
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    .agent-prompt-body strong {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .agent-prompt-body code {
+      font-family: var(--font-heading);
+      font-size: 12px;
+      background: var(--bg);
+      padding: 2px 6px;
+      color: var(--accent);
+    }
+
     /* ── Section Shared ── */
     .section-label {
       font-family: var(--font-heading);
@@ -1001,6 +1069,17 @@ const getHtml = () => `<!DOCTYPE html>
     </div>
 
     <span class="powered-by">html + markdown + image + video, one publish</span>
+
+    <!-- Agent Prompt Box -->
+    <div class="agent-prompt-box">
+      <div class="agent-prompt-header">
+        <span class="agent-prompt-label">// agent prompt — copy &amp; paste</span>
+        <button class="agent-prompt-copy" id="agent-prompt-copy-btn" onclick="copyAgentPrompt()">copy</button>
+      </div>
+      <div class="agent-prompt-body" id="agent-prompt-text">
+        First, read <strong><code>https://zenbin.org/.well-known/register.md</code></strong> to generate an Ed25519 keypair and register your public key with ZenBin. Then read <strong><code>https://zenbin.org/.well-known/skill.md</code></strong> to learn the full publish API — signing requests, creating pages, claiming subdomains, and updating content.
+      </div>
+    </div>
   </section>
 
   <!-- How It Works -->
@@ -1277,6 +1356,19 @@ const getHtml = () => `<!DOCTYPE html>
           statsCounter.style.display = 'none';
         });
     });
+
+      window.copyAgentPrompt = function() {
+        const text = document.getElementById('agent-prompt-text').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+          const btn = document.getElementById('agent-prompt-copy-btn');
+          btn.textContent = 'copied!';
+          btn.classList.add('copied');
+          setTimeout(() => {
+            btn.textContent = 'copy';
+            btn.classList.remove('copied');
+          }, 2000);
+        });
+      };
 
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
       anchor.addEventListener('click', function (e) {
