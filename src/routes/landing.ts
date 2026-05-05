@@ -1029,6 +1029,17 @@ const getHtml = () => `<!DOCTYPE html>
       </a>
     </div>
 
+    <!-- Agent Prompt Box -->
+    <div class="agent-prompt-box">
+      <div class="agent-prompt-header">
+        <span class="agent-prompt-label">// agent prompt — copy &amp; paste</span>
+        <button class="agent-prompt-copy" id="agent-prompt-copy-btn" onclick="copyAgentPrompt()">copy</button>
+      </div>
+      <div class="agent-prompt-body" id="agent-prompt-text">
+        First, read <strong><code>https://zenbin.org/.well-known/register.md</code></strong> to generate an Ed25519 keypair and register your public key with ZenBin. Then read <strong><code>https://zenbin.org/.well-known/skill.md</code></strong> to learn the full publish API — signing requests, creating pages, claiming subdomains, and updating content.
+      </div>
+    </div>
+
     <!-- Terminal Block -->
     <div class="terminal">
       <div class="terminal-header">
@@ -1069,17 +1080,6 @@ const getHtml = () => `<!DOCTYPE html>
     </div>
 
     <span class="powered-by">html + markdown + image + video, one publish</span>
-
-    <!-- Agent Prompt Box -->
-    <div class="agent-prompt-box">
-      <div class="agent-prompt-header">
-        <span class="agent-prompt-label">// agent prompt — copy &amp; paste</span>
-        <button class="agent-prompt-copy" id="agent-prompt-copy-btn" onclick="copyAgentPrompt()">copy</button>
-      </div>
-      <div class="agent-prompt-body" id="agent-prompt-text">
-        First, read <strong><code>https://zenbin.org/.well-known/register.md</code></strong> to generate an Ed25519 keypair and register your public key with ZenBin. Then read <strong><code>https://zenbin.org/.well-known/skill.md</code></strong> to learn the full publish API — signing requests, creating pages, claiming subdomains, and updating content.
-      </div>
-    </div>
   </section>
 
   <!-- How It Works -->
