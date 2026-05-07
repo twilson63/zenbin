@@ -1,7 +1,8 @@
 import { Context, Hono } from 'hono';
 import { config } from '../config.js';
 import { hasScope, requireSignedAgent } from '../middleware/signedAgent.js';
-import { deleteSubdomain, getSubdomain, listPagesBySubdomain, saveAuditLog, saveSubdomain } from '../storage/db.js';
+import { deleteSubdomain, getAgentKey, getSubdomain, incrementAgentKeyUsage, listPagesBySubdomain, saveAuditLog, saveSubdomain } from '../storage/db.js';
+import { checkSubdomainLimit, getPlanFromKey } from '../rules.js';
 
 const subdomains = new Hono();
 
@@ -58,6 +59,18 @@ subdomains.post('/:name', async (c) => {
     return c.json({ error: `Subdomain '${name}' is already taken` }, 409);
   }
 
+  // ─── Plan limit check ────────────────────────────────────
+  const agentKey = keyId ? getAgentKey(keyId) : undefined;
+  const plan = agentKey ? getPlanFromKey(agentKey) : 'free';
+  const subdomainLimit = checkSubdomainLimit(plan, agentKey?.monthlySubdomainCount || 0);
+  if (!subdomainLimit.allowed) {
+    return c.json({
+      error: subdomainLimit.reason,
+      plan,
+      upgradeUrl: `${config.baseUrl}/v1/billing/checkout?plan=pro`,
+    }, 402);
+  }
+
   const { subdomain, created } = await saveSubdomain(name, keyId);
   const baseUrl = config.baseUrl.replace(/^https?:\/\//, '');
   const protocol = config.baseUrl.startsWith('https') ? 'https' : 'http';
@@ -69,6 +82,11 @@ subdomains.post('/:name', async (c) => {
     subdomain: name,
     status: 'accepted',
   });
+
+  // Track usage for billing
+  if (keyId) {
+    incrementAgentKeyUsage(keyId, 'monthlySubdomainCount');
+  }
 
   return c.json({
     name: subdomain.name,

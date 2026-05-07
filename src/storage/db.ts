@@ -1,85 +1,31 @@
 import { open, Database } from 'lmdb';
 import { config } from '../config.js';
+import type {
+  Page,
+  PageAuth,
+  Subdomain,
+  AgentKey,
+  NonceRecord,
+  AuditLogRecord,
+  SaveResult,
+  SubdomainResult,
+  Plan,
+  StoredJwk,
+} from '../types.js';
 
-type StoredJwk = Record<string, string | boolean | undefined>;
-
-export interface PageAuth {
-  passwordHash?: string;
-  urlTokenHash?: string;
-}
-
-export interface Page {
-  id: string;
-  subdomain?: string;
-  html: string;
-  markdown?: string;
-  image?: string;
-  image_content_type?: string;
-  video?: string;
-  video_content_type?: string;
-  encoding: 'utf-8' | 'base64';
-  content_type: string;
-  title?: string;
-  etag: string;
-  created_at: string;
-  updated_at: string;
-  auth?: PageAuth;
-  ownerKeyId?: string;
-  lastUpdatedByKeyId?: string;
-  status?: 'active' | 'removed';
-}
-
-export interface Subdomain {
-  name: string;
-  created_at: string;
-  updated_at: string;
-  page_count: number;
-  ownerKeyId?: string;
-}
-
-export interface AgentKey {
-  keyId: string;
-  publicJwk: StoredJwk;
-  status: 'active' | 'blocked' | 'revoked';
-  scopes: string[];
-  created_at: string;
-  updated_at: string;
-  last_seen_at?: string;
-  blocked_reason?: string;
-  blocked_at?: string;
-  revoked_at?: string;
-}
-
-export interface NonceRecord {
-  id: string;
-  keyId: string;
-  nonce: string;
-  expires_at: string;
-  created_at: string;
-}
-
-export interface AuditLogRecord {
-  id: string;
-  action: string;
-  targetType: 'page' | 'subdomain' | 'agent_key' | 'auth';
-  keyId?: string;
-  pageId?: string;
-  subdomain?: string;
-  status: 'accepted' | 'rejected';
-  reason?: string;
-  created_at: string;
-  metadata?: Record<string, string | number | boolean | null | undefined>;
-}
-
-export interface SaveResult {
-  page: Page;
-  created: boolean;
-}
-
-export interface SubdomainResult {
-  subdomain: Subdomain;
-  created: boolean;
-}
+// Re-export types for backward compatibility
+export type {
+  Page,
+  PageAuth,
+  Subdomain,
+  AgentKey,
+  NonceRecord,
+  AuditLogRecord,
+  SaveResult,
+  SubdomainResult,
+  Plan,
+  StoredJwk,
+};
 
 let db: Database<Page, string>;
 let subdomainDb: Database<Subdomain, string>;
@@ -336,9 +282,10 @@ export function decrementSubdomainPageCount(name: string): void {
 
 export async function saveAgentKey(input: {
   keyId: string;
-  publicJwk: StoredJwk;
+  publicJwk: AgentKey['publicJwk'];
   scopes?: string[];
   status?: AgentKey['status'];
+  plan?: Plan;
 }): Promise<AgentKey> {
   const existing = getAgentKey(input.keyId);
   const now = nowIso();
@@ -353,6 +300,13 @@ export async function saveAgentKey(input: {
     blocked_reason: existing?.blocked_reason,
     blocked_at: existing?.blocked_at,
     revoked_at: existing?.revoked_at,
+    // Billing fields — default to free tier for backward compat
+    plan: input.plan || existing?.plan || 'free',
+    stripeCustomerId: existing?.stripeCustomerId,
+    subscriptionId: existing?.subscriptionId,
+    monthlyPageCount: existing?.monthlyPageCount || 0,
+    monthlySubdomainCount: existing?.monthlySubdomainCount || 0,
+    billingCycleStart: existing?.billingCycleStart,
   };
 
   getAgentKeyDatabase().putSync(input.keyId, record);
@@ -475,6 +429,56 @@ export function listAuditLogsForKey(keyId: string): AuditLogRecord[] {
     }
   }
   return logs.sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+// ─── Billing-Related Storage ───────────────────────────────
+
+export async function updateAgentKeyPlan(
+  keyId: string,
+  plan: Plan,
+  stripeCustomerId?: string,
+  subscriptionId?: string,
+): Promise<AgentKey | undefined> {
+  const existing = getAgentKey(keyId);
+  if (!existing) return undefined;
+
+  const updated: AgentKey = {
+    ...existing,
+    plan,
+    stripeCustomerId: stripeCustomerId ?? existing.stripeCustomerId,
+    subscriptionId: subscriptionId ?? existing.subscriptionId,
+    updated_at: nowIso(),
+  };
+
+  getAgentKeyDatabase().putSync(keyId, updated);
+  return updated;
+}
+
+export async function incrementAgentKeyUsage(
+  keyId: string,
+  field: 'monthlyPageCount' | 'monthlySubdomainCount',
+): Promise<void> {
+  const existing = getAgentKey(keyId);
+  if (!existing) return;
+
+  getAgentKeyDatabase().putSync(keyId, {
+    ...existing,
+    [field]: (existing[field] || 0) + 1,
+    updated_at: nowIso(),
+  });
+}
+
+export async function resetAgentKeyUsage(keyId: string): Promise<void> {
+  const existing = getAgentKey(keyId);
+  if (!existing) return;
+
+  getAgentKeyDatabase().putSync(keyId, {
+    ...existing,
+    monthlyPageCount: 0,
+    monthlySubdomainCount: 0,
+    billingCycleStart: nowIso(),
+    updated_at: nowIso(),
+  });
 }
 
 export async function closeDatabase(): Promise<void> {

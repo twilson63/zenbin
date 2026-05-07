@@ -2,7 +2,8 @@ import { Context, Hono } from 'hono';
 import { config } from '../config.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
 import { hasScope, requireSignedAgent } from '../middleware/signedAgent.js';
-import { decrementSubdomainPageCount, deletePage as deletePageFromDb, getPage, getSubdomain, incrementSubdomainPageCount, saveAuditLog, savePage } from '../storage/db.js';
+import { decrementSubdomainPageCount, deletePage as deletePageFromDb, getAgentKey, getPage, getSubdomain, incrementAgentKeyUsage, incrementSubdomainPageCount, saveAuditLog, savePage } from '../storage/db.js';
+import { checkPageLimit, getPlanFromKey } from '../rules.js';
 import { deleteVideo, saveVideo } from '../storage/video.js';
 import { generateEtag } from '../utils/etag.js';
 import { generateUrlToken, hashPassword, parseBasicAuth, verifyPassword } from '../utils/auth.js';
@@ -133,7 +134,23 @@ pages.post('/:id', async (c) => {
     }
   }
 
-  const existingPage = subdomain ? getPage(id, subdomain) : getPage(id);
+  // ─── Plan limit check ────────────────────────────────────
+  // Only enforce for NEW pages, not updates
+  const preExistingPage = subdomain ? getPage(id, subdomain) : getPage(id);
+  if (!preExistingPage) {
+    const agentKey = getAgentKey(keyId);
+    const plan = agentKey ? getPlanFromKey(agentKey) : 'free';
+    const pageLimit = checkPageLimit(plan, agentKey?.monthlyPageCount || 0);
+    if (!pageLimit.allowed) {
+      return c.json({
+        error: pageLimit.reason,
+        plan,
+        upgradeUrl: `${config.baseUrl}/v1/billing/checkout?plan=pro`,
+      }, 402);
+    }
+  }
+
+  const existingPage = preExistingPage;
   if (existingPage) {
     const sameOwner = existingPage.ownerKeyId === keyId;
     const canOverride = currentKeyCanOverride(c, 'pages:update:any');
@@ -223,6 +240,11 @@ pages.post('/:id', async (c) => {
 
   if (created && subdomain) {
     incrementSubdomainPageCount(subdomain);
+  }
+
+  // Track usage for billing
+  if (created) {
+    incrementAgentKeyUsage(keyId, 'monthlyPageCount');
   }
 
   const baseUrl = config.baseUrl;
