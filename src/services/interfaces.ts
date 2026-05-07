@@ -41,6 +41,10 @@ export interface IPageService {
   delete(id: string, subdomain?: string): Promise<boolean>;
   count(): number;
   listBySubdomain(subdomain: string): Page[];
+
+  // Billing-aware helpers
+  checkPublishLimit(keyId: string, id: string, subdomain?: string): LimitCheckResult;
+  trackPageCreation(keyId: string): void;
 }
 
 // ─── Subdomain Service ──────────────────────────────────────
@@ -52,6 +56,10 @@ export interface ISubdomainService {
   count(): number;
   incrementPageCount(name: string): void;
   decrementPageCount(name: string): void;
+
+  // Billing-aware helpers
+  checkClaimLimit(keyId: string): LimitCheckResult;
+  trackSubdomainClaim(keyId: string): void;
 }
 
 // ─── Key Service ────────────────────────────────────────────
