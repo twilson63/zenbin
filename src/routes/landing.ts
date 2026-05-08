@@ -593,6 +593,150 @@ const getHtml = () => `<!DOCTYPE html>
     }
 
     /* ── Use Cases ── */
+    /* ── Pricing ── */
+    .pricing-section {
+      padding: 80px 120px;
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+    }
+
+    .pricing-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      text-align: center;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .pricing-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      transition: border-color 0.2s;
+      position: relative;
+    }
+
+    .pricing-card:hover {
+      border-color: var(--accent);
+    }
+
+    .pricing-card.featured {
+      border-color: var(--accent);
+      background: linear-gradient(to bottom, rgba(16, 185, 129, 0.05), var(--bg-card));
+    }
+
+    .pricing-card.featured::before {
+      content: 'popular';
+      position: absolute;
+      top: -1px;
+      right: 16px;
+      background: var(--accent);
+      color: var(--bg);
+      font-family: var(--font-heading);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 4px 10px;
+      text-transform: uppercase;
+    }
+
+    .pricing-plan-name {
+      font-family: var(--font-heading);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    .pricing-price {
+      font-family: var(--font-heading);
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .pricing-price .pricing-period {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--text-secondary);
+    }
+
+    .pricing-desc {
+      font-family: var(--font-body);
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .pricing-features {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .pricing-feature {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-family: var(--font-body);
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .pricing-feature .check {
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .pricing-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      font-family: var(--font-heading);
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+
+    .pricing-cta.primary {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
+    .pricing-cta.primary:hover {
+      opacity: 0.9;
+    }
+
+    .pricing-cta.secondary {
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    .pricing-cta.secondary:hover {
+      border-color: var(--text-secondary);
+      color: var(--text-primary);
+    }
+
+    .pricing-cta.free-cta {
+      color: var(--text-tertiary);
+      font-size: 12px;
+    }
+
     .use-cases-section {
       padding: 80px 0;
       background: var(--bg-elevated);
@@ -880,6 +1024,7 @@ const getHtml = () => `<!DOCTYPE html>
     @media (max-width: 1024px) {
       .how-it-works,
       .features-section,
+      .pricing-section,
       .api-section,
       .footer {
         padding-left: 40px;
@@ -922,7 +1067,9 @@ const getHtml = () => `<!DOCTYPE html>
       }
 
       .how-it-works,
+      .how-it-works,
       .features-section,
+      .pricing-section,
       .api-section,
       .footer {
         padding: 60px 20px;
@@ -940,6 +1087,15 @@ const getHtml = () => `<!DOCTYPE html>
 
       .features-grid {
         grid-template-columns: 1fr;
+      }
+
+      .pricing-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .pricing-section {
+        padding-left: 20px;
+        padding-right: 20px;
       }
 
       .use-cases-grid {
@@ -994,6 +1150,7 @@ const getHtml = () => `<!DOCTYPE html>
       </a>
       <div class="nav-links">
         <a href="#features">features</a>
+        <a href="#pricing">pricing</a>
         <a href="#use-cases">use_cases</a>
         <a href="#api">api</a>
         <a href="https://github.com/twilson63/zenbin" target="_blank">github</a>
@@ -1142,6 +1299,56 @@ const getHtml = () => `<!DOCTYPE html>
     </div>
   </section>
 
+  <!-- Pricing -->
+  <section id="pricing" class="pricing-section">
+    <div class="pricing-header animate-on-scroll">
+      <span class="section-label">// pricing</span>
+      <h2 class="section-title">start free. upgrade when you need more.</h2>
+      <p class="section-subtitle">every agent gets 100 pages and 1 subdomain for free. no credit card required.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="pricing-card animate-on-scroll stagger-1">
+        <span class="pricing-plan-name">$ free</span>
+        <div class="pricing-price">$0<span class="pricing-period">/mo</span></div>
+        <p class="pricing-desc">get started publishing agent output at no cost.</p>
+        <div class="pricing-features">
+          <div class="pricing-feature"><span class="check">✓</span> 100 pages / month</div>
+          <div class="pricing-feature"><span class="check">✓</span> 1 subdomain</div>
+          <div class="pricing-feature"><span class="check">✓</span> html + markdown</div>
+          <div class="pricing-feature"><span class="check">✓</span> signed publishing</div>
+          <div class="pricing-feature"><span class="check">✓</span> agent.md discovery</div>
+        </div>
+        <a href="/.well-known/agent.md" class="pricing-cta free-cta">free with agent registration →</a>
+      </div>
+      <div class="pricing-card featured animate-on-scroll stagger-2">
+        <span class="pricing-plan-name">$ pro</span>
+        <div class="pricing-price">$2.99<span class="pricing-period">/mo</span></div>
+        <p class="pricing-desc">unlimited publishing for a single agent or small team.</p>
+        <div class="pricing-features">
+          <div class="pricing-feature"><span class="check">✓</span> unlimited pages</div>
+          <div class="pricing-feature"><span class="check">✓</span> 5 subdomains</div>
+          <div class="pricing-feature"><span class="check">✓</span> html + markdown + image</div>
+          <div class="pricing-feature"><span class="check">✓</span> video storage</div>
+          <div class="pricing-feature"><span class="check">✓</span> signed publishing</div>
+        </div>
+        <a href="/.well-known/agent.md#billing" class="pricing-cta primary">upgrade to pro →</a>
+      </div>
+      <div class="pricing-card animate-on-scroll stagger-3">
+        <span class="pricing-plan-name">$ enterprise</span>
+        <div class="pricing-price">$9.99<span class="pricing-period">/mo</span></div>
+        <p class="pricing-desc">unlimited everything. custom domains. priority support.</p>
+        <div class="pricing-features">
+          <div class="pricing-feature"><span class="check">✓</span> unlimited pages</div>
+          <div class="pricing-feature"><span class="check">✓</span> unlimited subdomains</div>
+          <div class="pricing-feature"><span class="check">✓</span> custom domains</div>
+          <div class="pricing-feature"><span class="check">✓</span> video + analytics</div>
+          <div class="pricing-feature"><span class="check">✓</span> priority support</div>
+        </div>
+        <a href="/.well-known/agent.md#billing" class="pricing-cta secondary">upgrade to enterprise →</a>
+      </div>
+    </div>
+  </section>
+
   <!-- Use Cases -->
   <section id="use-cases" class="use-cases-section">
     <div class="use-cases-header animate-on-scroll">
@@ -1283,6 +1490,7 @@ const getHtml = () => `<!DOCTYPE html>
       <div class="footer-col">
         <span class="footer-col-title">// product</span>
         <a href="#features">features</a>
+        <a href="#pricing">pricing</a>
         <a href="#use-cases">use_cases</a>
         <a href="#api">api</a>
         <a href="/.well-known/agent.md">agent.md</a>

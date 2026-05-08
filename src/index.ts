@@ -232,7 +232,7 @@ Endpoints:
   GET  /v1/subdomains/{name}/pages - List subdomain pages
   DELETE /v1/subdomains/{name}  - Delete subdomain
   POST /v1/pages/{id}           - Create or replace a page (signed)
-  GET  /v1/billing/usage        - Get current plan usage (signed)
+  POST /v1/billing/usage        - Get current plan usage (signed)
   POST /v1/billing/checkout    - Create Stripe checkout session (signed)
   POST /v1/billing/portal      - Create Stripe customer portal (signed)
   POST /v1/billing/webhook     - Stripe webhook handler
