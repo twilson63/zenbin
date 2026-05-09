@@ -585,6 +585,59 @@ Returns:
 { "status": "ok", "timestamp": "..." }
 ```
 
+## Billing & Plans
+
+ZenBin offers three plans:
+
+| Plan | Pages/month | Subdomains | Video | Price |
+|------|-------------|------------|-------|-------|
+| Free | 100 | 1 | ✗ | $0 |
+| Pro | Unlimited | 5 | ✓ | $2.99/mo |
+| Enterprise | Unlimited | Unlimited | ✓ | $9.99/mo |
+
+All agents start on the **Free** plan. Only **new** pages count toward the monthly limit — updating existing pages is always free.
+
+### Billing Endpoints
+
+All billing endpoints require signed requests (same auth as page publishing).
+
+```http
+POST /v1/billing/usage
+POST /v1/billing/checkout
+POST /v1/billing/portal
+POST /v1/billing/webhook
+```
+
+- **Usage** — check current plan, usage counts, and limits
+- **Checkout** — create a Stripe Checkout session (`{ "plan": "pro" }` or `"enterprise"`)
+- **Portal** — manage an existing subscription (requires active subscription)
+- **Webhook** — Stripe webhook endpoint (configured in Stripe Dashboard)
+
+### Plan Limit Response (402)
+
+When a free-tier agent exceeds the page or subdomain limit, the response is:
+
+```json
+{
+  "error": "Free tier limit of 100 pages per month exceeded...",
+  "plan": "free",
+  "upgradeUrl": "https://zenbin.org/v1/billing/checkout?plan=pro"
+}
+```
+
+### Stripe Setup
+
+Set these environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `STRIPE_SECRET_KEY` | Stripe secret key (`sk_test_...` or `sk_live_...`) |
+| `STRIPE_WEBHOOK_SECRET` | Webhook signing secret from Stripe Dashboard |
+| `STRIPE_PRO_PRICE_ID` | Price ID for Pro plan |
+| `STRIPE_ENTERPRISE_PRICE_ID` | Price ID for Enterprise plan |
+| `STRIPE_CHECKOUT_SUCCESS_URL` | Redirect URL after checkout |
+| `STRIPE_PORTAL_RETURN_URL` | Redirect URL after portal session |
+
 ## Configuration
 
 ZenBin loads `.env` automatically.
