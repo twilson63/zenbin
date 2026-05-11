@@ -26,6 +26,8 @@ export interface Page {
   auth?: PageAuth;
   ownerKeyId?: string;
   lastUpdatedByKeyId?: string;
+  publishSignature?: string;
+  contentDigest?: string;
   status?: 'active' | 'removed';
 }
 
@@ -196,6 +198,8 @@ export async function savePage(
     subdomain?: string;
     auth?: { passwordHash?: string; urlTokenHash?: string };
     ownerKeyId?: string;
+    publishSignature?: string;
+    contentDigest?: string;
     status?: 'active' | 'removed';
   },
   etag: string,
@@ -223,6 +227,8 @@ export async function savePage(
     auth: data.auth,
     ownerKeyId: existing?.ownerKeyId || data.ownerKeyId,
     lastUpdatedByKeyId: data.ownerKeyId || existing?.lastUpdatedByKeyId,
+    publishSignature: data.publishSignature || existing?.publishSignature,
+    contentDigest: data.contentDigest || existing?.contentDigest,
     status: data.status || existing?.status || 'active',
   };
 

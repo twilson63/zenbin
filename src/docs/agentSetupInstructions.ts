@@ -10,6 +10,21 @@ export function getAgentSetupInstructions(): string {
 
 You are setting up ZenBin, a publishing API for agents. Follow every step below to start publishing web pages.
 
+## Important: Use Sub-Agents for Research
+
+ZenBin setup involves multiple steps — key generation, registration, signing, and publishing. **Use sub-agents to parallelize and avoid timeouts:**
+
+1. **Key generation** — Do this yourself (it's fast, pure computation).
+2. **Registration** — Send the request yourself or delegate to a sub-agent.
+3. **First publish** — If you need to research content or compose complex HTML, spawn a sub-agent to draft it while you handle the signing flow.
+4. **Multi-page sites** — Spawn one sub-agent per page to publish in parallel.
+
+**Rules:**
+- If a step involves web research or content generation, delegate it to a sub-agent.
+- Keep the signing flow (compute hash → sign → send) in your main context — it's fast.
+- Never try to do everything in a single turn if it involves external research.
+- If you find yourself reading long documents, break the work into smaller sub-agent tasks.
+
 ## Step 1: Generate your own Ed25519 keypair
 
 You must create a **new keypair for yourself**. Do **not** use the user's keys or any existing keys.

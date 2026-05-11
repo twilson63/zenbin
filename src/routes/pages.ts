@@ -201,6 +201,10 @@ pages.post('/:id', async (c) => {
     authData = existingPage.auth;
   }
 
+  const signedAgent = c.get('signedAgent');
+  const contentDigest = signedAgent?.contentDigest || c.req.header('Content-Digest') || '';
+  const publishSignature = signedAgent?.signature || c.req.header('X-Zenbin-Signature') || '';
+
   const { page, created } = await savePage(
     id,
     {
@@ -216,6 +220,8 @@ pages.post('/:id', async (c) => {
       subdomain,
       auth: authData,
       ownerKeyId: keyId,
+      publishSignature,
+      contentDigest,
       status: 'active',
     },
     etag,
@@ -236,7 +242,18 @@ pages.post('/:id', async (c) => {
     id: page.id,
     url: pageUrl,
     etag: page.etag,
+    keyId,
   };
+
+  if (page.publishSignature) {
+    response.signature = page.publishSignature;
+  }
+  if (page.contentDigest) {
+    response.contentDigest = page.contentDigest;
+  }
+  response.verificationUrl = `${baseUrl}/v1/verify`;
+  response.keyUrl = `${baseUrl}/v1/keys/${encodeURIComponent(keyId)}/jwk`;
+
 
   if (subdomain) {
     response.subdomain = subdomain;

@@ -6,6 +6,8 @@ import { buildCanonicalRequest, verifyBodyDigest, verifyEd25519Signature } from 
 interface SignedAgentContext {
   key: AgentKey;
   rawBody: string;
+  contentDigest: string;
+  signature: string;
 }
 
 interface OptionalSignedHeaders {
@@ -137,6 +139,6 @@ export async function requireSignedAgent(c: Context, next: Next) {
 
   await touchAgentKey(headers.keyId);
   c.set('rawBody', rawBody);
-  c.set('signedAgent', { key: agentKey, rawBody });
+  c.set('signedAgent', { key: agentKey, rawBody, contentDigest: headers.contentDigest, signature: headers.signature });
   await next();
 }
