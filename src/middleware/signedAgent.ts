@@ -8,6 +8,10 @@ interface SignedAgentContext {
   rawBody: string;
   contentDigest: string;
   signature: string;
+  timestamp: string;
+  nonce: string;
+  method: string;
+  path: string;
 }
 
 interface OptionalSignedHeaders {
@@ -139,6 +143,15 @@ export async function requireSignedAgent(c: Context, next: Next) {
 
   await touchAgentKey(headers.keyId);
   c.set('rawBody', rawBody);
-  c.set('signedAgent', { key: agentKey, rawBody, contentDigest: headers.contentDigest, signature: headers.signature });
+  c.set('signedAgent', {
+    key: agentKey,
+    rawBody,
+    contentDigest: headers.contentDigest,
+    signature: headers.signature,
+    timestamp: headers.timestamp,
+    nonce: headers.nonce,
+    method: c.req.method,
+    path: c.req.path,
+  });
   await next();
 }

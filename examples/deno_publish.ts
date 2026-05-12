@@ -53,4 +53,22 @@ const response = await fetch(baseUrl + path, {
   body,
 });
 
-console.log(response.status, await response.text());
+const publishResult = await response.json();
+console.log(response.status, publishResult);
+
+// Provenance smoke check: verify the original publish body through ZenBin.
+const verifyResponse = await fetch(`${baseUrl}/v1/verify`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    keyId,
+    content: body,
+    signature: publishResult.signature,
+    contentDigest: publishResult.contentDigest,
+    timestamp,
+    nonce,
+    method: 'POST',
+    path,
+  }),
+});
+console.log('verification', await verifyResponse.json());

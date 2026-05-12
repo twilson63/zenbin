@@ -43,4 +43,22 @@ if subdomain:
     headers['X-Subdomain'] = subdomain
 
 response = requests.post(base_url + path, headers=headers, data=body)
-print(response.status_code, response.text)
+publish_result = response.json()
+print(response.status_code, publish_result)
+
+# Provenance smoke check: verify the original publish body through ZenBin.
+verify_response = requests.post(
+    base_url + '/v1/verify',
+    headers={'Content-Type': 'application/json'},
+    data=json.dumps({
+        'keyId': key_id,
+        'content': body,
+        'signature': publish_result['signature'],
+        'contentDigest': publish_result['contentDigest'],
+        'timestamp': timestamp,
+        'nonce': nonce,
+        'method': 'POST',
+        'path': path,
+    }),
+)
+print('verification', verify_response.json())

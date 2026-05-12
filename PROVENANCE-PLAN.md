@@ -7,7 +7,7 @@ GitHub #21 — Cryptographic provenance verification for published content
 When an agent publishes a page, the signature and public key are stored and exposed on reads, so any consumer can verify who created it.
 
 ## Design Decisions
-- Store `publishSignature` and `contentDigest` on the `Page` record (both are already computed at publish time — just persist them)
+- Store `publishSignature`, `contentDigest`, `publishTimestamp`, `publishNonce`, `publishMethod`, and `publishPath` on the `Page` record
 - Add `GET /v1/keys/:keyId/jwk` endpoint to expose public keys
 - Add provenance fields to page read responses (JSON and HTML metadata)
 - Add `POST /v1/verify` endpoint for programmatic verification
@@ -17,35 +17,36 @@ When an agent publishes a page, the signature and public key are stored and expo
 ## Phases
 
 ### Phase 0: Types & Storage
-- [ ] Add `publishSignature` and `contentDigest` to `Page` type in `src/types.ts`
-- [ ] Update `savePage` in `src/storage/db.ts` to persist these fields
-- [ ] Write tests for new Page fields (backward compat — undefined values)
+- [x] Add provenance fields to the `Page` type in `src/storage/db.ts`
+- [x] Update `savePage` in `src/storage/db.ts` to persist these fields
+- [x] Write tests for signed publish/read verification
 
 ### Phase 1: Persist Signature on Publish
-- [ ] In `src/routes/pages.ts` POST handler, capture `X-Zenbin-Signature` and `Content-Digest` headers
-- [ ] Pass them to `savePage` so they're stored on the page record
-- [ ] Include `signature`, `contentDigest`, `keyId`, and `verificationUrl` in the publish response JSON
-- [ ] Write tests: published pages should have signature and contentDigest in response
+- [x] In `src/routes/pages.ts` POST handler, capture signature, digest, timestamp, nonce, method, and path
+- [x] Pass them to `savePage` so they're stored on the page record
+- [x] Include `signature`, `contentDigest`, `keyId`, `verificationUrl`, `keyUrl`, and canonical fields in the publish response JSON
+- [x] Write tests: published pages should have signature and contentDigest in response
 
 ### Phase 2: Expose Public Keys
-- [ ] Add `GET /v1/keys/:keyId/jwk` endpoint that returns the public JWK for a key
-- [ ] Write tests: returns 200 with JWK for valid keyId, 404 for unknown keyId
+- [x] Add `GET /v1/keys/:keyId/jwk` endpoint that returns the public JWK for a key
+- [x] Write tests: returns 200 with JWK for valid keyId, 404 for unknown keyId
 
 ### Phase 3: Provenance on Read
-- [ ] Add provenance fields to page read responses (JSON: `/p/:id` when `Accept: application/json`)
-- [ ] Add `<meta>` tags to rendered HTML pages with signature and keyId
-- [ ] Write tests: GET page returns provenance fields
+- [x] Add provenance fields to page read responses (JSON: `/p/:id` when `Accept: application/json`)
+- [x] Add `<meta>` tags and HTTP headers to rendered HTML pages with signature and keyId
+- [x] Write tests: GET page returns provenance fields
 
 ### Phase 4: Verification Endpoint
-- [ ] Add `POST /v1/verify` endpoint that takes `keyId`, `content`, `signature`, and optionally `contentDigest`
-- [ ] Look up the public key, verify the signature against the content
-- [ ] Return `{ valid: boolean, keyId, verifiedAt }`
-- [ ] Write tests: valid signature, invalid signature, unknown keyId
+- [x] Add `POST /v1/verify` endpoint that takes `keyId`, `content`, `signature`, `contentDigest`, timestamp, nonce, method, and path
+- [x] Look up the public key, verify digest and signature against the canonical request
+- [x] Return `{ valid: boolean, keyId, verifiedAt }`
+- [x] Write tests: signed publish smoke verifies locally and through `/v1/verify`
 
 ### Phase 5: Agent Documentation
-- [ ] Update `/.well-known/agent.md` with provenance documentation
-- [ ] Update `/.well-known/skill.md` with verification instructions
-- [ ] Add provenance section to README
+- [x] Update `/.well-known/agent.md` with provenance documentation
+- [x] Update `/.well-known/skill.md` with verification instructions
+- [x] Add provenance section to README
+- [x] Update installed ZenBin agent skill with artifact verification workflow
 
 ## Testing Strategy
 - All tests follow existing patterns in `src/test/`

@@ -28,6 +28,10 @@ export interface Page {
   lastUpdatedByKeyId?: string;
   publishSignature?: string;
   contentDigest?: string;
+  publishTimestamp?: string;
+  publishNonce?: string;
+  publishMethod?: string;
+  publishPath?: string;
   status?: 'active' | 'removed';
 }
 
@@ -200,6 +204,10 @@ export async function savePage(
     ownerKeyId?: string;
     publishSignature?: string;
     contentDigest?: string;
+    publishTimestamp?: string;
+    publishNonce?: string;
+    publishMethod?: string;
+    publishPath?: string;
     status?: 'active' | 'removed';
   },
   etag: string,
@@ -229,6 +237,10 @@ export async function savePage(
     lastUpdatedByKeyId: data.ownerKeyId || existing?.lastUpdatedByKeyId,
     publishSignature: data.publishSignature || existing?.publishSignature,
     contentDigest: data.contentDigest || existing?.contentDigest,
+    publishTimestamp: data.publishTimestamp || existing?.publishTimestamp,
+    publishNonce: data.publishNonce || existing?.publishNonce,
+    publishMethod: data.publishMethod || existing?.publishMethod,
+    publishPath: data.publishPath || existing?.publishPath,
     status: data.status || existing?.status || 'active',
   };
 

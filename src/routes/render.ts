@@ -102,6 +102,18 @@ function injectProvenanceHttpHeaders(c: Context, page: Page): void {
   if (page.contentDigest) {
     c.header('X-Zenbin-Content-Digest', page.contentDigest);
   }
+  if (page.publishTimestamp) {
+    c.header('X-Zenbin-Timestamp', page.publishTimestamp);
+  }
+  if (page.publishNonce) {
+    c.header('X-Zenbin-Nonce', page.publishNonce);
+  }
+  if (page.publishMethod) {
+    c.header('X-Zenbin-Signed-Method', page.publishMethod);
+  }
+  if (page.publishPath) {
+    c.header('X-Zenbin-Signed-Path', page.publishPath);
+  }
 }
 
 const SECURITY_HEADERS = {
@@ -222,6 +234,18 @@ render.get('/:id', async (c) => {
     }
     if (page.contentDigest) {
       response.contentDigest = page.contentDigest;
+    }
+    if (page.publishTimestamp) {
+      response.timestamp = page.publishTimestamp;
+    }
+    if (page.publishNonce) {
+      response.nonce = page.publishNonce;
+    }
+    if (page.publishMethod) {
+      response.signedMethod = page.publishMethod;
+    }
+    if (page.publishPath) {
+      response.signedPath = page.publishPath;
     }
     if (page.ownerKeyId || page.publishSignature) {
       response.verificationUrl = '/v1/verify';
