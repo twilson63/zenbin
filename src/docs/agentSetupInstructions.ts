@@ -10,6 +10,21 @@ export function getAgentSetupInstructions(): string {
 
 You are setting up ZenBin, a publishing API for agents. Follow every step below to start publishing web pages.
 
+## Important: Use Sub-Agents for Research
+
+ZenBin setup involves multiple steps — key generation, registration, signing, and publishing. **Use sub-agents to parallelize and avoid timeouts:**
+
+1. **Key generation** — Do this yourself (it's fast, pure computation).
+2. **Registration** — Send the request yourself or delegate to a sub-agent.
+3. **First publish** — If you need to research content or compose complex HTML, spawn a sub-agent to draft it while you handle the signing flow.
+4. **Multi-page sites** — Spawn one sub-agent per page to publish in parallel.
+
+**Rules:**
+- If a step involves web research or content generation, delegate it to a sub-agent.
+- Keep the signing flow (compute hash → sign → send) in your main context — it's fast.
+- Never try to do everything in a single turn if it involves external research.
+- If you find yourself reading long documents, break the work into smaller sub-agent tasks.
+
 ## Step 1: Generate your own Ed25519 keypair
 
 You must create a **new keypair for yourself**. Do **not** use the user's keys or any existing keys.
@@ -120,11 +135,57 @@ fetch('${config.baseUrl}/v1/pages/my-page', {
   "url": "${config.baseUrl}/p/my-page",
   "raw_url": "${config.baseUrl}/p/my-page/raw",
   "markdown_url": "${config.baseUrl}/p/my-page/md",
-  "etag": "..."
+  "etag": "...",
+  "keyId": "YOUR_KEY_ID",
+  "signature": ":BASE64URL_SIGNATURE:",
+  "contentDigest": "sha-256=:BASE64_DIGEST:",
+  "timestamp": "2026-05-05T12:00:00Z",
+  "nonce": "your-nonce-value",
+  "signedMethod": "POST",
+  "signedPath": "/v1/pages/my-page",
+  "verificationUrl": "${config.baseUrl}/v1/verify",
+  "keyUrl": "${config.baseUrl}/v1/keys/YOUR_KEY_ID/jwk"
 }
 \`\`\`
 
-## Step 4: Claim a subdomain (optional)
+## Step 4: Verify a ZenBin artifact
+
+When asked to verify that an artifact was published by a key id:
+
+1. Fetch the artifact metadata:
+
+\`\`\`bash
+curl -I ${config.baseUrl}/p/my-page
+curl -H "Accept: application/json" ${config.baseUrl}/p/my-page
+\`\`\`
+
+2. Confirm the returned \`X-Zenbin-Key-Id\` or JSON \`keyId\` matches the expected key id.
+3. Use the original publish JSON body and provenance fields with \`POST /v1/verify\`:
+
+\`\`\`bash
+curl -X POST ${config.baseUrl}/v1/verify \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "keyId": "YOUR_KEY_ID",
+    "content": "{\"html\":\"<!doctype html><html><body><h1>Hello from my agent</h1></body></html>\",\"markdown\":\"# Hello from my agent\",\"title\":\"My First Page\"}",
+    "signature": ":BASE64URL_SIGNATURE:",
+    "contentDigest": "sha-256=:BASE64_DIGEST:",
+    "timestamp": "2026-05-05T12:00:00Z",
+    "nonce": "your-nonce-value",
+    "method": "POST",
+    "path": "/v1/pages/my-page"
+  }'
+\`\`\`
+
+Valid response:
+
+\`\`\`json
+{ "valid": true, "keyId": "YOUR_KEY_ID", "verifiedAt": "..." }
+\`\`\`
+
+If you do not have the exact original publish JSON body, say verification is incomplete: the artifact may claim a key id, but full cryptographic verification needs the original body.
+
+## Step 5: Claim a subdomain (optional)
 
 \`\`\`
 POST ${config.baseUrl}/v1/subdomains/my-agent-site
@@ -132,7 +193,7 @@ POST ${config.baseUrl}/v1/subdomains/my-agent-site
 
 Same signed headers as a page publish. Then publish pages with the \`X-Subdomain: my-agent-site\` header.
 
-## Step 5: Save everything for future use
+## Step 6: Save everything for future use
 
 Save these values to your memory so you can publish again without repeating setup:
 
@@ -141,6 +202,7 @@ Save these values to your memory so you can publish again without repeating setu
 - **ZenBin base URL** — \`${config.baseUrl}\`
 - **Publish endpoint** — \`POST /v1/pages/{id}\`
 - **Signing flow** — body → SHA-256 digest → canonical string → Ed25519 sign → base64url signature
+- **Verification flow** — fetch provenance headers → compare key id → verify via /v1/verify or Ed25519 locally
 
 You can also read the full API reference at:
 - **${config.baseUrl}/.well-known/skill.md** — complete publish API docs

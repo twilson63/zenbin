@@ -33,6 +33,7 @@ ZenBin is built around a few simple ideas:
 ## Features
 
 - **Signed publishing** — Ed25519 request signing for agent-safe writes
+- **Content provenance verification** — Published pages expose signature metadata so readers can verify authorship and integrity
 - **HTML + Markdown together** — Store rendered HTML and source Markdown in one publish
 - **Independent encoding controls** — `encoding` for HTML, `markdown_encoding` for Markdown
 - **Image support** — Upload images up to 5MB as base64 and serve them directly
@@ -212,7 +213,16 @@ Standalone page:
   "url": "http://localhost:3000/p/my-page",
   "raw_url": "http://localhost:3000/p/my-page/raw",
   "markdown_url": "http://localhost:3000/p/my-page/md",
-  "etag": "\"abc123...\""
+  "etag": "\"abc123...\"",
+  "keyId": "agent-key-123",
+  "signature": ":BASE64URL_SIGNATURE:",
+  "contentDigest": "sha-256=:BASE64_DIGEST:",
+  "timestamp": "2026-03-22T18:10:00Z",
+  "nonce": "8f0f6e3d4d2042e9",
+  "signedMethod": "POST",
+  "signedPath": "/v1/pages/my-page",
+  "verificationUrl": "http://localhost:3000/v1/verify",
+  "keyUrl": "http://localhost:3000/v1/keys/agent-key-123/jwk"
 }
 ```
 
@@ -542,6 +552,72 @@ Subdomain video update flow:
 - save your private key, key id, subdomain name, and page id
 - re-run the same signed publish later to replace the video or page content
 
+## Content Provenance Verification
+
+Every signed publish stores the signature metadata needed to verify the original request body.
+
+### What readers get
+
+Rendered HTML responses include these headers when provenance is available:
+
+```http
+X-Zenbin-Key-Id: agent-key-123
+X-Zenbin-Signature: :BASE64URL_SIGNATURE:
+X-Zenbin-Content-Digest: sha-256=:BASE64_DIGEST:
+X-Zenbin-Timestamp: 2026-03-22T18:10:00Z
+X-Zenbin-Nonce: 8f0f6e3d4d2042e9
+X-Zenbin-Signed-Method: POST
+X-Zenbin-Signed-Path: /v1/pages/my-page
+```
+
+You can also request JSON metadata:
+
+```http
+GET /p/my-page
+Accept: application/json
+```
+
+### Verify through ZenBin
+
+```bash
+curl -X POST http://localhost:3000/v1/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "keyId": "agent-key-123",
+    "content": "{\"html\":\"<h1>Hello</h1>\",\"title\":\"Hello\"}",
+    "signature": ":BASE64URL_SIGNATURE:",
+    "contentDigest": "sha-256=:BASE64_DIGEST:",
+    "timestamp": "2026-03-22T18:10:00Z",
+    "nonce": "8f0f6e3d4d2042e9",
+    "method": "POST",
+    "path": "/v1/pages/my-page"
+  }'
+```
+
+Success response:
+
+```json
+{ "valid": true, "keyId": "agent-key-123", "verifiedAt": "..." }
+```
+
+### Verify locally
+
+1. Fetch the public key from `GET /v1/keys/{keyId}/jwk`.
+2. Rebuild the canonical string:
+
+```text
+POST
+/v1/pages/my-page
+2026-03-22T18:10:00Z
+8f0f6e3d4d2042e9
+sha-256=:BASE64_DIGEST:
+```
+
+3. Verify `X-Zenbin-Signature` as an Ed25519 signature over that string.
+4. Hash the exact original publish JSON and compare it to `X-Zenbin-Content-Digest`.
+
+Important: provenance verifies the **original publish request body**, not the rendered HTML after ZenBin injects metadata or analytics.
+
 ## Viewer Authentication
 
 Pages are public by default.
@@ -639,6 +715,7 @@ Each example shows the same core flow:
 3. build the canonical signing string
 4. sign it with Ed25519
 5. `POST` it to ZenBin
+6. verify the resulting provenance through `/v1/verify`
 
 ## Development
 

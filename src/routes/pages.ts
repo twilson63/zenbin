@@ -201,6 +201,14 @@ pages.post('/:id', async (c) => {
     authData = existingPage.auth;
   }
 
+  const signedAgent = c.get('signedAgent');
+  const contentDigest = signedAgent?.contentDigest || c.req.header('Content-Digest') || '';
+  const publishSignature = signedAgent?.signature || c.req.header('X-Zenbin-Signature') || '';
+  const publishTimestamp = signedAgent?.timestamp || c.req.header('X-Zenbin-Timestamp') || '';
+  const publishNonce = signedAgent?.nonce || c.req.header('X-Zenbin-Nonce') || '';
+  const publishMethod = signedAgent?.method || c.req.method;
+  const publishPath = signedAgent?.path || c.req.path;
+
   const { page, created } = await savePage(
     id,
     {
@@ -216,6 +224,12 @@ pages.post('/:id', async (c) => {
       subdomain,
       auth: authData,
       ownerKeyId: keyId,
+      publishSignature,
+      contentDigest,
+      publishTimestamp,
+      publishNonce,
+      publishMethod,
+      publishPath,
       status: 'active',
     },
     etag,
@@ -236,7 +250,30 @@ pages.post('/:id', async (c) => {
     id: page.id,
     url: pageUrl,
     etag: page.etag,
+    keyId,
   };
+
+  if (page.publishSignature) {
+    response.signature = page.publishSignature;
+  }
+  if (page.contentDigest) {
+    response.contentDigest = page.contentDigest;
+  }
+  if (page.publishTimestamp) {
+    response.timestamp = page.publishTimestamp;
+  }
+  if (page.publishNonce) {
+    response.nonce = page.publishNonce;
+  }
+  if (page.publishMethod) {
+    response.signedMethod = page.publishMethod;
+  }
+  if (page.publishPath) {
+    response.signedPath = page.publishPath;
+  }
+  response.verificationUrl = `${baseUrl}/v1/verify`;
+  response.keyUrl = `${baseUrl}/v1/keys/${encodeURIComponent(keyId)}/jwk`;
+
 
   if (subdomain) {
     response.subdomain = subdomain;

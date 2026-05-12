@@ -2,12 +2,14 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { pages } from '../routes/pages.js';
 import { render } from '../routes/render.js';
+import { verify } from '../routes/verify.js';
 import { initDatabase, closeDatabase, getPage } from '../storage/db.js';
 import { existsSync, rmSync } from 'fs';
 import { createTestSigner, generateTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
 import { adminKeys } from '../routes/adminKeys.js';
 import { keys } from '../routes/keys.js';
 import { config } from '../config.js';
+import { buildCanonicalRequest, verifyEd25519Signature } from '../utils/httpSignature.js';
 
 const TEST_DB_PATH = './data/test-api.lmdb';
 const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
@@ -18,6 +20,7 @@ app.route('/v1/pages', pages);
 app.route('/p', render);
 app.route('/v1/keys', keys);
 app.route('/v1/admin/keys', adminKeys);
+app.route('/v1/verify', verify);
 
 // Generate unique IDs for each test run
 let testId: number;
@@ -136,6 +139,84 @@ describe('POST /v1/pages/:id', () => {
     expect(data.url).toContain(`/p/${pageId}`);
     expect(data.raw_url).toContain(`/p/${pageId}/raw`);
     expect(data.etag).toBeDefined();
+  });
+
+  it('should publish with an HTTP signature and expose verifiable provenance on read', async () => {
+    const pageId = uniqueId('signed-smoke');
+    const path = `/v1/pages/${pageId}`;
+    const timestamp = new Date().toISOString();
+    const nonce = uniqueId('nonce');
+    const publishBody = {
+      html: '<!doctype html><html><head><title>Signed</title></head><body>Signed smoke</body></html>',
+      title: 'Signed Smoke',
+    };
+    const publishContent = JSON.stringify(publishBody);
+
+    const publishRes = await app.request(path, jsonSignedRequest({
+      signer,
+      method: 'POST',
+      path,
+      body: publishBody,
+      timestamp,
+      nonce,
+    }));
+
+    expect(publishRes.status).toBe(201);
+    const publishData = await publishRes.json() as {
+      signature: string;
+      contentDigest: string;
+      timestamp: string;
+      nonce: string;
+      signedMethod: string;
+      signedPath: string;
+    };
+
+    const readRes = await app.request(`/p/${pageId}`);
+    expect(readRes.status).toBe(200);
+    expect(await readRes.text()).toContain('Signed smoke');
+
+    const signature = readRes.headers.get('X-Zenbin-Signature');
+    const contentDigest = readRes.headers.get('X-Zenbin-Content-Digest');
+    expect(readRes.headers.get('X-Zenbin-Key-Id')).toBe(signer.keyId);
+    expect(signature).toBe(publishData.signature);
+    expect(contentDigest).toBe(publishData.contentDigest);
+    expect(readRes.headers.get('X-Zenbin-Timestamp')).toBe(timestamp);
+    expect(readRes.headers.get('X-Zenbin-Nonce')).toBe(nonce);
+    expect(readRes.headers.get('X-Zenbin-Signed-Method')).toBe('POST');
+    expect(readRes.headers.get('X-Zenbin-Signed-Path')).toBe(path);
+
+    const canonical = buildCanonicalRequest({
+      method: 'POST',
+      path,
+      timestamp,
+      nonce,
+      contentDigest: contentDigest!,
+    });
+    expect(verifyEd25519Signature({
+      publicJwk: signer.publicJwk,
+      canonical,
+      signature: signature!,
+    })).toBe(true);
+
+    const verifyRes = await app.request('/v1/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        keyId: signer.keyId,
+        content: publishContent,
+        signature,
+        contentDigest,
+        timestamp,
+        nonce,
+        method: 'POST',
+        path,
+      }),
+    });
+
+    expect(verifyRes.status).toBe(200);
+    const verifyData = await verifyRes.json() as { valid: boolean; keyId: string };
+    expect(verifyData.valid).toBe(true);
+    expect(verifyData.keyId).toBe(signer.keyId);
   });
 
   it('should allow the same signing key to update an existing page', async () => {
