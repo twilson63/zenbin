@@ -61,6 +61,71 @@ export function createSignedHeaders(input: {
   };
 }
 
+/**
+ * Create CAP Protocol v0.1 signed headers.
+ * Uses CAP-* headers instead of X-Zenbin-* headers.
+ */
+export function createCapSignedHeaders(input: {
+  signer: TestSigner;
+  method: string;
+  path: string;
+  body?: string;
+  timestamp?: string;
+  nonce?: string;
+}): HeadersInit {
+  const body = input.body || '';
+  const timestamp = input.timestamp || new Date().toISOString();
+  const nonce = input.nonce || `${Date.now()}${Math.random().toString(16).slice(2)}`;
+  const contentDigest = createContentDigest(body);
+  const canonical = [input.method.toUpperCase(), input.path, timestamp, nonce, contentDigest].join('\n');
+
+  const signature = sign(
+    null,
+    Buffer.from(canonical, 'utf-8'),
+    {
+      key: input.signer.privateJwk,
+      format: 'jwk',
+    },
+  );
+
+  return {
+    'CAP-Version': '0.1',
+    'CAP-Key-Id': input.signer.keyId,
+    'CAP-Timestamp': timestamp,
+    'CAP-Nonce': nonce,
+    'CAP-Digest': contentDigest,
+    'CAP-Signature': `:${toBase64Url(signature)}:`,
+  };
+}
+
+export function jsonCapSignedRequest(input: {
+  signer: TestSigner;
+  method: string;
+  path: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+  timestamp?: string;
+  nonce?: string;
+}): RequestInit {
+  const body = input.body === undefined ? '' : JSON.stringify(input.body);
+  return {
+    method: input.method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...createCapSignedHeaders({
+        signer: input.signer,
+        method: input.method,
+        path: input.path,
+        body,
+        timestamp: input.timestamp,
+        nonce: input.nonce,
+      }),
+      ...(input.headers || {}),
+    },
+    body: body || undefined,
+  };
+}
+
 export function jsonSignedRequest(input: {
   signer: TestSigner;
   method: string;

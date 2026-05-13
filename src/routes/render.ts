@@ -69,17 +69,18 @@ function injectProvenanceMeta(html: string, page: Page): string {
 
   const metaTags: string[] = [];
   if (page.ownerKeyId) {
-    metaTags.push(`  <meta name="zenbin:key-id" content="${page.ownerKeyId}">`);
-    metaTags.push(`  <meta name="zenbin:key-url" content="/v1/keys/${page.ownerKeyId}/jwk">`);
+    metaTags.push(`  <meta name="cap:key-id" content="${page.ownerKeyId}">`);
+    metaTags.push(`  <meta name="cap:key-url" content="/v1/keys/${page.ownerKeyId}/jwk">`);
   }
   if (page.publishSignature) {
-    metaTags.push(`  <meta name="zenbin:signature" content="${page.publishSignature}">`);
+    metaTags.push(`  <meta name="cap:signature" content="${page.publishSignature}">`);
   }
   if (page.contentDigest) {
-    metaTags.push(`  <meta name="zenbin:content-digest" content="${page.contentDigest}">`);
+    metaTags.push(`  <meta name="cap:digest" content="${page.contentDigest}">`);
   }
   if (page.ownerKeyId || page.publishSignature) {
-    metaTags.push(`  <meta name="zenbin:verification-url" content="/v1/verify">`);
+    metaTags.push(`  <meta name="cap:version" content="0.1">`);
+    metaTags.push(`  <meta name="cap:verification-url" content="/v1/verify">`);
   }
 
   const provenanceBlock = metaTags.join('\n');
@@ -89,23 +90,31 @@ function injectProvenanceMeta(html: string, page: Page): string {
     return html.replace('</head>', `${provenanceBlock}\n</head>`);
   }
   // No <head> — prepend as a block
-  return `<!-- ZenBin Provenance -->\n${provenanceBlock}\n${html}`;
+  return `<!-- CAP Provenance -->\n${provenanceBlock}\n${html}`;
 }
 
 function injectProvenanceHttpHeaders(c: Context, page: Page): void {
+  // CAP Protocol headers (CAP-Attest v0.1)
   if (page.ownerKeyId) {
+    c.header('CAP-Version', '0.1');
+    c.header('CAP-Key-Id', page.ownerKeyId);
+    // Legacy X-Zenbin header for backward compatibility
     c.header('X-Zenbin-Key-Id', page.ownerKeyId);
   }
   if (page.publishSignature) {
+    c.header('CAP-Signature', page.publishSignature);
     c.header('X-Zenbin-Signature', page.publishSignature);
   }
   if (page.contentDigest) {
+    c.header('CAP-Digest', page.contentDigest);
     c.header('X-Zenbin-Content-Digest', page.contentDigest);
   }
   if (page.publishTimestamp) {
+    c.header('CAP-Timestamp', page.publishTimestamp);
     c.header('X-Zenbin-Timestamp', page.publishTimestamp);
   }
   if (page.publishNonce) {
+    c.header('CAP-Nonce', page.publishNonce);
     c.header('X-Zenbin-Nonce', page.publishNonce);
   }
   if (page.publishMethod) {
@@ -225,6 +234,7 @@ render.get('/:id', async (c) => {
       updated_at: page.updated_at,
     };
 
+    // CAP Protocol provenance fields
     if (page.ownerKeyId) {
       response.keyId = page.ownerKeyId;
       response.keyUrl = `/v1/keys/${encodeURIComponent(page.ownerKeyId)}/jwk`;
@@ -249,6 +259,7 @@ render.get('/:id', async (c) => {
     }
     if (page.ownerKeyId || page.publishSignature) {
       response.verificationUrl = '/v1/verify';
+      response.capVersion = '0.1';
     }
 
     c.header('ETag', jsonEtag);
