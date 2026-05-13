@@ -273,6 +273,7 @@ pages.post('/:id', async (c) => {
   }
   response.verificationUrl = `${baseUrl}/v1/verify`;
   response.keyUrl = `${baseUrl}/v1/keys/${encodeURIComponent(keyId)}/jwk`;
+  response.capVersion = '0.1';
 
 
   if (subdomain) {
