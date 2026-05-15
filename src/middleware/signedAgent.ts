@@ -6,6 +6,12 @@ import { buildCanonicalRequest, verifyBodyDigest, verifyEd25519Signature } from 
 interface SignedAgentContext {
   key: AgentKey;
   rawBody: string;
+  contentDigest: string;
+  signature: string;
+  timestamp: string;
+  nonce: string;
+  method: string;
+  path: string;
 }
 
 interface OptionalSignedHeaders {
@@ -32,12 +38,13 @@ declare module 'hono' {
 }
 
 function getSignedHeaders(c: Context): OptionalSignedHeaders {
+  // CAP headers take priority, X-Zenbin headers are legacy fallback
   return {
-    keyId: c.req.header('X-Zenbin-Key-Id'),
-    timestamp: c.req.header('X-Zenbin-Timestamp'),
-    nonce: c.req.header('X-Zenbin-Nonce'),
-    contentDigest: c.req.header('Content-Digest'),
-    signature: c.req.header('X-Zenbin-Signature'),
+    keyId: c.req.header('CAP-Key-Id') || c.req.header('X-Zenbin-Key-Id'),
+    timestamp: c.req.header('CAP-Timestamp') || c.req.header('X-Zenbin-Timestamp'),
+    nonce: c.req.header('CAP-Nonce') || c.req.header('X-Zenbin-Nonce'),
+    contentDigest: c.req.header('CAP-Digest') || c.req.header('Content-Digest'),
+    signature: c.req.header('CAP-Signature') || c.req.header('X-Zenbin-Signature'),
   };
 }
 
@@ -137,6 +144,15 @@ export async function requireSignedAgent(c: Context, next: Next) {
 
   await touchAgentKey(headers.keyId);
   c.set('rawBody', rawBody);
-  c.set('signedAgent', { key: agentKey, rawBody });
+  c.set('signedAgent', {
+    key: agentKey,
+    rawBody,
+    contentDigest: headers.contentDigest,
+    signature: headers.signature,
+    timestamp: headers.timestamp,
+    nonce: headers.nonce,
+    method: c.req.method,
+    path: c.req.path,
+  });
   await next();
 }

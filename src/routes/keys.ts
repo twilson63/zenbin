@@ -72,4 +72,25 @@ keys.post('/register', async (c) => {
   }, 201);
 });
 
+// GET /:keyId/jwk — Get the public JWK for a signing key (provenance verification)
+keys.get('/:keyId/jwk', (c) => {
+  const keyId = decodeURIComponent(c.req.param('keyId'));
+  const agentKey = getAgentKey(keyId);
+
+  if (!agentKey) {
+    return c.json({ error: 'Key not found' }, 404);
+  }
+
+  if (agentKey.status === 'revoked') {
+    return c.json({ error: 'Key has been revoked' }, 410);
+  }
+
+  return c.json({
+    keyId: agentKey.keyId,
+    publicJwk: agentKey.publicJwk,
+    status: agentKey.status,
+    created_at: agentKey.created_at,
+  });
+});
+
 export { keys };

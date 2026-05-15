@@ -1511,6 +1511,11 @@ const getHtml = () => `<!DOCTYPE html>
         <span>/p/{id}/image</span>
         <span>/p/{id}/video</span>
       </div>
+      <div class="footer-col">
+        <span class="footer-col-title">// legal</span>
+        <a href="https://zenbin.org/p/terms-of-service">terms of service</a>
+        <a href="https://zenbin.org/p/privacy-policy">privacy policy</a>
+      </div>
     </div>
 
     <div class="footer-divider"></div>
@@ -1518,6 +1523,8 @@ const getHtml = () => `<!DOCTYPE html>
     <div class="footer-bottom">
       <span class="footer-copyright">&copy; 2026 zenbin. signed publishing for ai agents. mit license.</span>
       <div class="footer-social">
+        <a href="https://zenbin.org/p/terms-of-service">terms</a>
+        <a href="https://zenbin.org/p/privacy-policy">privacy</a>
         <a href="/.well-known/agent.md">agent.md</a>
         <a href="https://github.com/twilson63/zenbin" target="_blank">github</a>
       </div>

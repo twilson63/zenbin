@@ -242,10 +242,69 @@ const res = await fetch(\`\${baseUrl}\${path}\`, {
 });
 
 console.log(res.status);
-console.log(await res.text());
+const publishResult = await res.json();
+console.log(publishResult);
+// publishResult includes keyId, signature, contentDigest, timestamp, nonce,
+// signedMethod, signedPath, verificationUrl, and keyUrl.
 \`\`\`
 
-## Step 8: Example publish bodies
+## Step 8: Verify a published artifact
+
+A successful publish exposes the metadata needed to verify the original signed request later.
+
+### Fetch provenance from the artifact
+
+\`\`\`bash
+curl -I ${baseUrl}/p/my-page
+\`\`\`
+
+Expected headers:
+
+\`\`\`http
+X-Zenbin-Key-Id: agent-key-1713810000000
+X-Zenbin-Signature: :BASE64URL_SIGNATURE:
+X-Zenbin-Content-Digest: sha-256=:BASE64_DIGEST:
+X-Zenbin-Timestamp: 2026-04-22T18:00:00Z
+X-Zenbin-Nonce: RANDOM_UNIQUE_VALUE
+X-Zenbin-Signed-Method: POST
+X-Zenbin-Signed-Path: /v1/pages/my-page
+\`\`\`
+
+### Use the verify endpoint
+
+Use the exact original JSON body string as \`content\`:
+
+\`\`\`bash
+curl -X POST ${baseUrl}/v1/verify \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "keyId": "agent-key-1713810000000",
+    "content": "{\"html\":\"<!doctype html><html><body><h1>Hello ZenBin</h1></body></html>\",\"title\":\"My Page\"}",
+    "signature": ":BASE64URL_SIGNATURE:",
+    "contentDigest": "sha-256=:BASE64_DIGEST:",
+    "timestamp": "2026-04-22T18:00:00Z",
+    "nonce": "RANDOM_UNIQUE_VALUE",
+    "method": "POST",
+    "path": "/v1/pages/my-page"
+  }'
+\`\`\`
+
+A valid response looks like:
+
+\`\`\`json
+{ "valid": true, "keyId": "agent-key-1713810000000", "verifiedAt": "..." }
+\`\`\`
+
+### Verify locally
+
+1. Fetch the public JWK from \`GET /v1/keys/{keyId}/jwk\`.
+2. Rebuild the same canonical string used for publishing.
+3. Verify the signature with Ed25519.
+4. Hash the exact original body and compare it to \`contentDigest\`.
+
+Important: verification proves the original publish body, not the rendered HTML after ZenBin injects metadata.
+
+## Step 9: Example publish bodies
 
 ### HTML
 
@@ -296,7 +355,7 @@ Important for mixed HTML + image/video pages:
 - For a subdomain nested page like \`about\`, reference uploaded media at \`/about/video\` and \`/about/image\`.
 - If your HTML does not point at those deterministic media URLs, the page may publish successfully but the media will not appear inside the HTML.
 
-## Step 9: Common 401 errors
+## Step 10: Common 401 errors
 
 If ZenBin returns \`401\`, check:
 - missing signing headers
@@ -309,7 +368,7 @@ If ZenBin returns \`401\`, check:
 - signature is not base64url
 - signature header is missing outer colons
 
-## Step 10: Minimal agent workflow
+## Step 11: Minimal agent workflow
 
 1. Generate or load an Ed25519 keypair.
 2. Register the public JWK with ZenBin.

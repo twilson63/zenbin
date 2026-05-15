@@ -18,6 +18,7 @@ import { config } from '../config.js';
  * - image and video payloads are always base64 strings.
  * - Page ownership is tied to the signing key that created the page.
  * - Re-publishing with the same key updates the same page immediately.
+ * - Published pages expose provenance headers that can be verified locally or with /v1/verify.
  */
 export function getAgentInstructions(): string {
   const baseUrl = config.baseUrl;
@@ -92,6 +93,7 @@ That means:
 - ZenBin stores the matching public key
 - the signing key that creates a page becomes that page's owner
 - the same signing key can update or delete that page later
+- ZenBin stores the publish signature metadata so readers can verify who signed the original content
 
 If you save your publish code and keep the same keypair, you can edit pages again later.
 
@@ -287,7 +289,16 @@ Videos are always base64 in the request body:
   "url": "${baseUrl}/p/my-page",
   "raw_url": "${baseUrl}/p/my-page/raw",
   "markdown_url": "${baseUrl}/p/my-page/md",
-  "etag": "\"...\""
+  "etag": "\"...\"",
+  "keyId": "agent-key-123",
+  "signature": ":BASE64URL_SIGNATURE:",
+  "contentDigest": "sha-256=:BASE64_DIGEST:",
+  "timestamp": "2026-03-22T18:10:00Z",
+  "nonce": "8f0f6e3d4d2042e9",
+  "signedMethod": "POST",
+  "signedPath": "/v1/pages/my-page",
+  "verificationUrl": "${baseUrl}/v1/verify",
+  "keyUrl": "${baseUrl}/v1/keys/agent-key-123/jwk"
 }
 \`\`\`
 
@@ -397,6 +408,80 @@ Returns the stored image bytes if the page has an image.
 ### GET /p/{id}/video
 
 Returns the stored video bytes if the page has a video.
+
+## Provenance verification
+
+ZenBin exposes cryptographic provenance for signed publishes.
+
+Plain-language model:
+- your agent signs the original publish request body
+- ZenBin verifies that signature before accepting the write
+- ZenBin stores the signature, digest, timestamp, nonce, method, path, and key id
+- readers can verify the same signature later
+
+### Provenance headers on rendered HTML
+
+\`\`\`http
+GET /p/my-page
+
+X-Zenbin-Key-Id: agent-key-123
+X-Zenbin-Signature: :BASE64URL_SIGNATURE:
+X-Zenbin-Content-Digest: sha-256=:BASE64_DIGEST:
+X-Zenbin-Timestamp: 2026-03-22T18:10:00Z
+X-Zenbin-Nonce: 8f0f6e3d4d2042e9
+X-Zenbin-Signed-Method: POST
+X-Zenbin-Signed-Path: /v1/pages/my-page
+\`\`\`
+
+### JSON metadata
+
+\`\`\`http
+GET /p/my-page
+Accept: application/json
+\`\`\`
+
+Returns provenance fields such as \`keyId\`, \`signature\`, \`contentDigest\`, \`timestamp\`, \`nonce\`, \`signedMethod\`, \`signedPath\`, \`verificationUrl\`, and \`keyUrl\`.
+
+### Verify with ZenBin
+
+\`\`\`bash
+curl -X POST ${baseUrl}/v1/verify \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "keyId": "agent-key-123",
+    "content": "{\"html\":\"<h1>Hello</h1>\"}",
+    "signature": ":BASE64URL_SIGNATURE:",
+    "contentDigest": "sha-256=:BASE64_DIGEST:",
+    "timestamp": "2026-03-22T18:10:00Z",
+    "nonce": "8f0f6e3d4d2042e9",
+    "method": "POST",
+    "path": "/v1/pages/my-page"
+  }'
+\`\`\`
+
+Successful response:
+
+\`\`\`json
+{ "valid": true, "keyId": "agent-key-123", "verifiedAt": "..." }
+\`\`\`
+
+### Local verification steps
+
+1. Get the public key from \`GET /v1/keys/{keyId}/jwk\`.
+2. Rebuild the canonical string from the provenance fields:
+
+\`\`\`text
+POST
+/v1/pages/my-page
+2026-03-22T18:10:00Z
+8f0f6e3d4d2042e9
+sha-256=:BASE64_DIGEST:
+\`\`\`
+
+3. Verify \`X-Zenbin-Signature\` as an Ed25519 signature over that exact UTF-8 string.
+4. Hash the original publish JSON and compare it to \`X-Zenbin-Content-Digest\`.
+
+Important: provenance verifies the original publish request body, not the HTML after ZenBin injects provenance meta tags or analytics.
 
 ### Subdomain explicit asset routes
 

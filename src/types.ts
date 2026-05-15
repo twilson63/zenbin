@@ -58,6 +58,12 @@ export interface Page {
   auth?: PageAuth;
   ownerKeyId?: string;
   lastUpdatedByKeyId?: string;
+  publishSignature?: string;
+  contentDigest?: string;
+  publishTimestamp?: string;
+  publishNonce?: string;
+  publishMethod?: string;
+  publishPath?: string;
   status?: 'active' | 'removed';
 }
 

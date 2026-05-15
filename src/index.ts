@@ -22,6 +22,7 @@ import { billing } from './routes/billing.js';
 import { serveSubdomainPage } from './routes/subdomainRender.js';
 import { adminKeys } from './routes/adminKeys.js';
 import { keys } from './routes/keys.js';
+import { verify } from './routes/verify.js';
 
 // Type for context variables
 type Variables = {
@@ -93,6 +94,21 @@ Sitemap: ${config.baseUrl}/sitemap.xml
   return c.body(robotsTxt);
 });
 
+// llms.txt - AI/LLM discoverability
+app.get('/llms.txt', async (c) => {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const llmsTxt = fs.readFileSync(path.join(__dirname, '../public/llms.txt'), 'utf-8');
+    c.header('Content-Type', 'text/plain; charset=utf-8');
+    return c.body(llmsTxt);
+  } catch {
+    return c.notFound();
+  }
+});
+
 // Health check
 app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -103,6 +119,7 @@ app.route('/v1/pages', pages);
 app.route('/v1/subdomains', subdomains);
 app.route('/v1/stats', stats);
 app.route('/v1/keys', keys);
+app.route('/v1/verify', verify);
 app.route('/v1/admin/keys', adminKeys);
 app.route('/v1/billing', billing);
 
@@ -220,6 +237,7 @@ Server running at http://${info.address}:${info.port}
 Endpoints:
   GET  /                        - Landing page
   GET  /robots.txt              - Robots.txt for crawlers
+  GET  /llms.txt                - LLM discoverability file
   GET  /.well-known/agent.md     - Agent setup: keygen → register → publish
   GET  /.well-known/skill.md     - Agent instructions
   GET  /.well-known/register.md  - Agent key registration + signing guide

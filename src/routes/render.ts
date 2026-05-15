@@ -62,6 +62,69 @@ function serveBinary(c: Context, bodyBase64: string, contentType: string, filena
   return c.body(buffer);
 }
 
+function injectProvenanceMeta(html: string, page: Page): string {
+  if (!page.ownerKeyId && !page.publishSignature) {
+    return html;
+  }
+
+  const metaTags: string[] = [];
+  if (page.ownerKeyId) {
+    metaTags.push(`  <meta name="cap:key-id" content="${page.ownerKeyId}">`);
+    metaTags.push(`  <meta name="cap:key-url" content="/v1/keys/${page.ownerKeyId}/jwk">`);
+  }
+  if (page.publishSignature) {
+    metaTags.push(`  <meta name="cap:signature" content="${page.publishSignature}">`);
+  }
+  if (page.contentDigest) {
+    metaTags.push(`  <meta name="cap:digest" content="${page.contentDigest}">`);
+  }
+  if (page.ownerKeyId || page.publishSignature) {
+    metaTags.push(`  <meta name="cap:version" content="0.1">`);
+    metaTags.push(`  <meta name="cap:verification-url" content="/v1/verify">`);
+  }
+
+  const provenanceBlock = metaTags.join('\n');
+
+  // Inject before </head> if it exists, otherwise prepend
+  if (html.includes('</head>')) {
+    return html.replace('</head>', `${provenanceBlock}\n</head>`);
+  }
+  // No <head> — prepend as a block
+  return `<!-- CAP Provenance -->\n${provenanceBlock}\n${html}`;
+}
+
+function injectProvenanceHttpHeaders(c: Context, page: Page): void {
+  // CAP Protocol headers (CAP-Attest v0.1)
+  if (page.ownerKeyId) {
+    c.header('CAP-Version', '0.1');
+    c.header('CAP-Key-Id', page.ownerKeyId);
+    // Legacy X-Zenbin header for backward compatibility
+    c.header('X-Zenbin-Key-Id', page.ownerKeyId);
+  }
+  if (page.publishSignature) {
+    c.header('CAP-Signature', page.publishSignature);
+    c.header('X-Zenbin-Signature', page.publishSignature);
+  }
+  if (page.contentDigest) {
+    c.header('CAP-Digest', page.contentDigest);
+    c.header('X-Zenbin-Content-Digest', page.contentDigest);
+  }
+  if (page.publishTimestamp) {
+    c.header('CAP-Timestamp', page.publishTimestamp);
+    c.header('X-Zenbin-Timestamp', page.publishTimestamp);
+  }
+  if (page.publishNonce) {
+    c.header('CAP-Nonce', page.publishNonce);
+    c.header('X-Zenbin-Nonce', page.publishNonce);
+  }
+  if (page.publishMethod) {
+    c.header('X-Zenbin-Signed-Method', page.publishMethod);
+  }
+  if (page.publishPath) {
+    c.header('X-Zenbin-Signed-Path', page.publishPath);
+  }
+}
+
 const SECURITY_HEADERS = {
   'Content-Security-Policy': [
     "default-src 'self' https:",
@@ -152,7 +215,58 @@ render.get('/:id', async (c) => {
   }
 
   const acceptHeader = c.req.header('Accept') || '';
+  const wantsJson = acceptHeader.includes('application/json');
   const wantsMarkdown = acceptHeader.includes('text/markdown');
+
+  // Return page metadata with provenance fields for JSON requests
+  if (wantsJson) {
+    const ifNoneMatch = c.req.header('If-None-Match');
+    const jsonEtag = generateEtag(JSON.stringify({ id: page.id, etag: page.etag }));
+    if (etagMatches(ifNoneMatch, jsonEtag)) {
+      return c.body(null, 304);
+    }
+
+    const response: Record<string, unknown> = {
+      id: page.id,
+      etag: page.etag,
+      content_type: page.content_type,
+      created_at: page.created_at,
+      updated_at: page.updated_at,
+    };
+
+    // CAP Protocol provenance fields
+    if (page.ownerKeyId) {
+      response.keyId = page.ownerKeyId;
+      response.keyUrl = `/v1/keys/${encodeURIComponent(page.ownerKeyId)}/jwk`;
+    }
+    if (page.publishSignature) {
+      response.signature = page.publishSignature;
+    }
+    if (page.contentDigest) {
+      response.contentDigest = page.contentDigest;
+    }
+    if (page.publishTimestamp) {
+      response.timestamp = page.publishTimestamp;
+    }
+    if (page.publishNonce) {
+      response.nonce = page.publishNonce;
+    }
+    if (page.publishMethod) {
+      response.signedMethod = page.publishMethod;
+    }
+    if (page.publishPath) {
+      response.signedPath = page.publishPath;
+    }
+    if (page.ownerKeyId || page.publishSignature) {
+      response.verificationUrl = '/v1/verify';
+      response.capVersion = '0.1';
+    }
+
+    c.header('ETag', jsonEtag);
+    c.header('Cache-Control', 'public, max-age=0, must-revalidate');
+    trackRequestView(c, id);
+    return c.json(response);
+  }
 
   if (wantsMarkdown && page.markdown) {
     const mdEtag = generateEtag(page.markdown);
@@ -208,9 +322,11 @@ render.get('/:id', async (c) => {
 
   trackRequestView(c, id);
 
-  const html = shouldInjectPostHog(page.html)
-    ? injectPostHog(page.html)
-    : page.html;
+  injectProvenanceHttpHeaders(c, page);
+
+  let html = page.html;
+  html = injectProvenanceMeta(html, page);
+  html = shouldInjectPostHog(html) ? injectPostHog(html) : html;
 
   return c.body(html);
 });
