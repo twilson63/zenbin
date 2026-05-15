@@ -28,5 +28,3 @@ npm-debug.log*
 
 # Test coverage
 coverage/
-.deploy-key
-.deploy-key.pub
