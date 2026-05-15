@@ -7,8 +7,8 @@
 
 import Stripe from 'stripe';
 import { config } from '../config.js';
-import { getAgentKey, updateAgentKeyPlan, resetAgentKeyUsage } from '../storage/db.js';
-import { PLAN_LIMITS } from '../rules.js';
+import { getAgentKey, listAgentKeys, updateAgentKeyPlan, resetAgentKeyUsage } from '../storage/db.js';
+import { isBillingCycleExpired, PLAN_LIMITS } from '../rules.js';
 import type { Plan } from '../types.js';
 import type { IBillingService } from '../services/interfaces.js';
 
@@ -17,13 +17,18 @@ function getStripeClient(): Stripe | null {
   return new Stripe(config.stripe.secretKey);
 }
 
-const PRICE_IDS: Record<Plan, string> = {
-  free: '',
-  pro: config.stripe.proPriceId,
-  enterprise: config.stripe.enterprisePriceId,
-};
+function getPriceId(plan: Plan): string {
+  switch (plan) {
+    case 'pro':
+      return config.stripe.proPriceId;
+    case 'enterprise':
+      return config.stripe.enterprisePriceId;
+    case 'free':
+      return '';
+  }
+}
 
-export const billingService: IBillingService = {
+export class BillingService implements IBillingService {
   async createCheckoutSession(keyId: string, plan: Plan): Promise<{ url: string; sessionId: string }> {
     const stripe = getStripeClient();
     if (!stripe) {
@@ -35,7 +40,7 @@ export const billingService: IBillingService = {
       throw new Error(`Agent key '${keyId}' not found.`);
     }
 
-    const priceId = PRICE_IDS[plan];
+    const priceId = getPriceId(plan);
     if (!priceId) {
       throw new Error(`Invalid plan '${plan}' or price ID not configured.`);
     }
@@ -47,6 +52,7 @@ export const billingService: IBillingService = {
         metadata: { zenbinKeyId: keyId },
       });
       customerId = customer.id;
+      await updateAgentKeyPlan(keyId, agentKey.plan || 'free', customerId, agentKey.subscriptionId);
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -62,7 +68,7 @@ export const billingService: IBillingService = {
       url: session.url || '',
       sessionId: session.id,
     };
-  },
+  }
 
   async createPortalSession(stripeCustomerId: string): Promise<{ url: string }> {
     const stripe = getStripeClient();
@@ -76,12 +82,20 @@ export const billingService: IBillingService = {
     });
 
     return { url: session.url };
-  },
+  }
 
   async getUsage(keyId: string) {
-    const agentKey = getAgentKey(keyId);
+    let agentKey = getAgentKey(keyId);
     if (!agentKey) {
       throw new Error(`Agent key '${keyId}' not found.`);
+    }
+
+    if (isBillingCycleExpired(agentKey.billingCycleStart, config.freeTier.monthlyWindowMs)) {
+      await resetAgentKeyUsage(keyId);
+      agentKey = getAgentKey(keyId);
+      if (!agentKey) {
+        throw new Error(`Agent key '${keyId}' not found.`);
+      }
     }
 
     const plan = agentKey.plan || 'free';
@@ -96,7 +110,7 @@ export const billingService: IBillingService = {
         subdomains: limits.subdomains,
       },
     };
-  },
+  }
 
   async handleWebhook(event: { type: string; data: { object: any } }): Promise<void> {
     switch (event.type) {
@@ -116,11 +130,20 @@ export const billingService: IBillingService = {
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object;
-        const customerId = subscription.customer;
+        const customerId = typeof subscription.customer === 'string'
+          ? subscription.customer
+          : subscription.customer?.id;
+        const subscriptionId = subscription.id;
 
-        // Find the key by stripe customer ID
-        // We need to iterate keys to find the one with this customer ID
-        // This is handled by the route layer which has access to listAgentKeys
+        const agentKey = listAgentKeys().find((key) => (
+          (subscriptionId && key.subscriptionId === subscriptionId)
+          || (customerId && key.stripeCustomerId === customerId)
+        ));
+
+        if (agentKey) {
+          await updateAgentKeyPlan(agentKey.keyId, 'free', agentKey.stripeCustomerId, '');
+          await resetAgentKeyUsage(agentKey.keyId);
+        }
         break;
       }
 
@@ -134,7 +157,7 @@ export const billingService: IBillingService = {
         // Ignore other events
         break;
     }
-  },
+  }
 
   async recordMeterEvent(keyId: string, eventName: string, value: number): Promise<void> {
     const stripe = getStripeClient();
@@ -150,5 +173,7 @@ export const billingService: IBillingService = {
         value: String(value),
       },
     });
-  },
-};
+  }
+}
+
+export const billingService: IBillingService = new BillingService();

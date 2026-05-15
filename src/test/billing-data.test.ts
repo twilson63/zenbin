@@ -4,11 +4,13 @@ import {
   closeDatabase,
   saveAgentKey,
   getAgentKey,
+  getAgentKeyDatabase,
   updateAgentKeyPlan,
   incrementAgentKeyUsage,
   resetAgentKeyUsage,
 } from '../storage/db.js';
 import { rmSync } from 'fs';
+import { billingService } from '../services/billingService.js';
 
 const TEST_DB_PATH = './data/test-billing-data.lmdb';
 const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
@@ -140,6 +142,50 @@ describe('incrementAgentKeyUsage', () => {
 
   it('should not throw for non-existent key', async () => {
     await expect(incrementAgentKeyUsage('nonexistent', 'monthlyPageCount')).resolves.toBeUndefined();
+  });
+});
+
+describe('billing webhook lifecycle', () => {
+  it('should downgrade a key to free when subscription is deleted', async () => {
+    await saveAgentKey({
+      keyId: 'billing-test-cancel-webhook',
+      publicJwk: { kty: 'OKP', crv: 'Ed25519', x: 'test-cancel' },
+    });
+    await updateAgentKeyPlan('billing-test-cancel-webhook', 'pro', 'cus_cancel', 'sub_cancel');
+    await incrementAgentKeyUsage('billing-test-cancel-webhook', 'monthlyPageCount');
+
+    await billingService.handleWebhook({
+      type: 'customer.subscription.deleted',
+      data: {
+        object: {
+          id: 'sub_cancel',
+          customer: 'cus_cancel',
+        },
+      },
+    });
+
+    const key = getAgentKey('billing-test-cancel-webhook');
+    expect(key?.plan).toBe('free');
+    expect(key?.stripeCustomerId).toBe('cus_cancel');
+    expect(key?.subscriptionId).toBe('');
+    expect(key?.monthlyPageCount).toBe(0);
+  });
+
+  it('should reset expired usage cycle when usage is read', async () => {
+    await saveAgentKey({
+      keyId: 'billing-test-expired-usage',
+      publicJwk: { kty: 'OKP', crv: 'Ed25519', x: 'test-expired' },
+    });
+    await incrementAgentKeyUsage('billing-test-expired-usage', 'monthlyPageCount');
+    const key = getAgentKey('billing-test-expired-usage');
+    expect(key).toBeDefined();
+    if (key) {
+      key.billingCycleStart = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+      getAgentKeyDatabase().putSync(key.keyId, key);
+    }
+
+    const usage = await billingService.getUsage('billing-test-expired-usage');
+    expect(usage.pagesUsed).toBe(0);
   });
 });
 

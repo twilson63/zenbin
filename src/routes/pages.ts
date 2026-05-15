@@ -2,8 +2,8 @@ import { Context, Hono } from 'hono';
 import { config } from '../config.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
 import { hasScope, requireSignedAgent } from '../middleware/signedAgent.js';
-import { decrementSubdomainPageCount, deletePage as deletePageFromDb, getAgentKey, getPage, getSubdomain, incrementAgentKeyUsage, incrementSubdomainPageCount, saveAuditLog, savePage } from '../storage/db.js';
-import { checkPageLimit, getPlanFromKey } from '../rules.js';
+import { decrementSubdomainPageCount, deletePage as deletePageFromDb, getAgentKey, getPage, getSubdomain, incrementAgentKeyUsage, incrementSubdomainPageCount, resetAgentKeyUsage, saveAuditLog, savePage } from '../storage/db.js';
+import { checkPageLimit, getPlanFromKey, isBillingCycleExpired } from '../rules.js';
 import { deleteVideo, saveVideo } from '../storage/video.js';
 import { generateEtag } from '../utils/etag.js';
 import { generateUrlToken, hashPassword, parseBasicAuth, verifyPassword } from '../utils/auth.js';
@@ -138,7 +138,11 @@ pages.post('/:id', async (c) => {
   // Only enforce for NEW pages, not updates
   const preExistingPage = subdomain ? getPage(id, subdomain) : getPage(id);
   if (!preExistingPage) {
-    const agentKey = getAgentKey(keyId);
+    let agentKey = getAgentKey(keyId);
+    if (agentKey && isBillingCycleExpired(agentKey.billingCycleStart, config.freeTier.monthlyWindowMs)) {
+      await resetAgentKeyUsage(keyId);
+      agentKey = getAgentKey(keyId);
+    }
     const plan = agentKey ? getPlanFromKey(agentKey) : 'free';
     const pageLimit = checkPageLimit(plan, agentKey?.monthlyPageCount || 0);
     if (!pageLimit.allowed) {

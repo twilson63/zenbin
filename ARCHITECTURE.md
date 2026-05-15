@@ -89,10 +89,14 @@ Only **new pages** count. Updates to existing pages are always free.
 | `src/services/subdomainService.ts` | Subdomain operations + plan limit checks |
 | `src/services/keyService.ts` | Agent key management |
 | `src/services/billingService.ts` | Stripe integration |
-| `src/services/container.ts` | DI container wiring all services |
+| `src/services/container.ts` | Service factory wiring all services |
 | `src/storage/db.ts` | LMDB storage layer |
 | `src/routes/billing.ts` | Billing API endpoints |
 | `src/middleware/signedAgent.ts` | Ed25519 request verification |
+
+## Service Layer Status
+
+The service layer is currently a bootstrap abstraction: services implement interfaces and are created through `createServices()`, but most implementations still delegate to the existing LMDB storage functions. This keeps the public contracts and tests in place while avoiding a large route rewrite in the same PR. A follow-up refactor should pass service instances into route factories so route tests can swap in in-memory implementations without LMDB.
 
 ## Deployment
 

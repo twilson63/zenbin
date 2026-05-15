@@ -1,8 +1,8 @@
 import { Context, Hono } from 'hono';
 import { config } from '../config.js';
 import { hasScope, requireSignedAgent } from '../middleware/signedAgent.js';
-import { deleteSubdomain, getAgentKey, getSubdomain, incrementAgentKeyUsage, listPagesBySubdomain, saveAuditLog, saveSubdomain } from '../storage/db.js';
-import { checkSubdomainLimit, getPlanFromKey } from '../rules.js';
+import { deleteSubdomain, getAgentKey, getSubdomain, incrementAgentKeyUsage, listPagesBySubdomain, resetAgentKeyUsage, saveAuditLog, saveSubdomain } from '../storage/db.js';
+import { checkSubdomainLimit, getPlanFromKey, isBillingCycleExpired } from '../rules.js';
 
 const subdomains = new Hono();
 
@@ -60,7 +60,11 @@ subdomains.post('/:name', async (c) => {
   }
 
   // ─── Plan limit check ────────────────────────────────────
-  const agentKey = keyId ? getAgentKey(keyId) : undefined;
+  let agentKey = keyId ? getAgentKey(keyId) : undefined;
+  if (keyId && agentKey && isBillingCycleExpired(agentKey.billingCycleStart, config.freeTier.monthlyWindowMs)) {
+    await resetAgentKeyUsage(keyId);
+    agentKey = getAgentKey(keyId);
+  }
   const plan = agentKey ? getPlanFromKey(agentKey) : 'free';
   const subdomainLimit = checkSubdomainLimit(plan, agentKey?.monthlySubdomainCount || 0);
   if (!subdomainLimit.allowed) {

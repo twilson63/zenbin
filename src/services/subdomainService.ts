@@ -13,7 +13,6 @@ import {
   decrementSubdomainPageCount as dbDecrementSubdomainPageCount,
   incrementAgentKeyUsage,
   getAgentKey,
-  listPagesBySubdomain,
 } from '../storage/db.js';
 import { checkSubdomainLimit, getPlanFromKey } from '../rules.js';
 import type { Subdomain, SubdomainResult, LimitCheckResult } from '../types.js';
@@ -30,12 +29,7 @@ export class SubdomainService implements ISubdomainService {
   }
 
   async delete(name: string): Promise<boolean> {
-    // Delete all pages in the subdomain first
-    const pages = listPagesBySubdomain(name);
-    for (const page of pages) {
-      // This is handled by the route layer which calls pageService.delete
-      // For now, cascade delete via DB
-    }
+    // dbDeleteSubdomain performs the cascade delete for pages under this subdomain.
     return dbDeleteSubdomain(name);
   }
 

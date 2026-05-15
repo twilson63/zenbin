@@ -98,8 +98,8 @@ export const config = {
     return {
       secretKey: process.env.STRIPE_SECRET_KEY || '',
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
-      proPriceId: process.env.STRIPE_PRO_PRICE_ID || 'price_1TUXnMCdTeU3dtdYYpicTmck',
-      enterprisePriceId: process.env.STRIPE_ENTERPRISE_PRICE_ID || 'price_1TUXnvCdTeU3dtdYyNgZUcOn',
+      proPriceId: process.env.STRIPE_PRO_PRICE_ID || '',
+      enterprisePriceId: process.env.STRIPE_ENTERPRISE_PRICE_ID || '',
       checkoutSuccessUrl: process.env.STRIPE_CHECKOUT_SUCCESS_URL || `${config.baseUrl}/billing/success`,
       portalReturnUrl: process.env.STRIPE_PORTAL_RETURN_URL || config.baseUrl,
     };

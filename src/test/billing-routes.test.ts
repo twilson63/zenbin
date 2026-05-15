@@ -12,6 +12,7 @@ const app = new Hono();
 app.route('/v1/billing', billing);
 
 let freeSigner: TestSigner;
+let noCustomerSigner: TestSigner;
 let proSigner: TestSigner;
 
 beforeAll(async () => {
@@ -22,6 +23,7 @@ beforeAll(async () => {
   initDatabase();
 
   freeSigner = await createTestSigner(`billing-route-free-${Date.now()}`);
+  noCustomerSigner = await createTestSigner(`billing-route-no-customer-${Date.now()}`);
   proSigner = await createTestSigner(`billing-route-pro-${Date.now()}`);
   await updateAgentKeyPlan(proSigner.keyId, 'pro', 'cus_test_pro', 'sub_test_pro');
 });
@@ -115,7 +117,7 @@ describe('POST /v1/billing/checkout', () => {
 describe('POST /v1/billing/portal', () => {
   it('should reject key without Stripe customer ID', async () => {
     const res = await app.request('/v1/billing/portal', jsonSignedRequest({
-      signer: freeSigner,
+      signer: noCustomerSigner,
       method: 'POST',
       path: '/v1/billing/portal',
       body: {},
