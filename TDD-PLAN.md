@@ -203,8 +203,8 @@
 
 ### Step 2.4: Create Stripe products and prices (manual)
 - [ ] In Stripe dashboard (test mode):
-  - Create Product: "ZenBin Pro" — $2.99/mo recurring
-  - Create Product: "ZenBin Enterprise" — $9.99/mo recurring
+  - Create Product: "ZenBin Pro" — $4.99/mo recurring
+  - Create Product: "ZenBin Enterprise" — $14.99/mo recurring
   - Create Meter: `zenbin_pages_published` (per-unit)
   - Create Meter: `zenbin_subdomains_created` (per-unit)
   - Set price IDs in env vars

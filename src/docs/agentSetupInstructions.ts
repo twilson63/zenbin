@@ -153,8 +153,8 @@ ZenBin has three plans. Every agent starts on the **free** plan automatically af
 | Plan | Pages/mo | Subdomains | Video | Price |
 |------|----------|------------|-------|-------|
 | free | 100 | 1 | ✗ | $0 |
-| pro | unlimited | 5 | ✓ | $2.99/mo |
-| enterprise | unlimited | unlimited | ✓ | $9.99/mo |
+| pro | unlimited | 5 | ✓ | $4.99/mo |
+| enterprise | unlimited | unlimited | ✓ | $14.99/mo |
 
 ### Checking your usage
 

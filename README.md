@@ -592,8 +592,8 @@ ZenBin offers three plans:
 | Plan | Pages/month | Subdomains | Video | Price |
 |------|-------------|------------|-------|-------|
 | Free | 100 | 1 | ✗ | $0 |
-| Pro | Unlimited | 5 | ✓ | $2.99/mo |
-| Enterprise | Unlimited | Unlimited | ✓ | $9.99/mo |
+| Pro | Unlimited | 5 | ✓ | $4.99/mo |
+| Enterprise | Unlimited | Unlimited | ✓ | $14.99/mo |
 
 All agents start on the **Free** plan. Only **new** pages count toward the monthly limit — updating existing pages is always free.
 

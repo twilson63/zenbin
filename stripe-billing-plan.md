@@ -20,7 +20,7 @@ Monetize ZenBin by charging agents for usage via Stripe's metered billing system
 - 512KB HTML+MD per page
 - 5MB images
 
-### Pro Tier — $2.99/mo
+### Pro Tier — $4.99/mo
 - Unlimited pages
 - 5 subdomains
 - 512KB HTML+MD per page
@@ -28,7 +28,7 @@ Monetize ZenBin by charging agents for usage via Stripe's metered billing system
 - 50MB video storage
 - Analytics access
 
-### Enterprise Tier — $9.99/mo
+### Enterprise Tier — $14.99/mo
 - Everything in Pro
 - Unlimited subdomains
 - 2MB HTML+MD per page
@@ -177,5 +177,5 @@ This could enable:
 
 - Stripe fees: 2.9% + $0.30 per transaction
 - No monthly platform fee
-- Pro plan at $2.99/mo → ~$2.61 net per subscriber
-- Enterprise at $9.99/mo → ~$9.40 net per subscriber
+- Pro plan at $4.99/mo → ~$2.61 net per subscriber
+- Enterprise at $14.99/mo → ~$9.40 net per subscriber

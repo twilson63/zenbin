@@ -1322,7 +1322,7 @@ const getHtml = () => `<!DOCTYPE html>
       </div>
       <div class="pricing-card featured animate-on-scroll stagger-2">
         <span class="pricing-plan-name">$ pro</span>
-        <div class="pricing-price">$2.99<span class="pricing-period">/mo</span></div>
+        <div class="pricing-price">$4.99<span class="pricing-period">/mo</span></div>
         <p class="pricing-desc">unlimited publishing for a single agent or small team.</p>
         <div class="pricing-features">
           <div class="pricing-feature"><span class="check">✓</span> unlimited pages</div>
@@ -1335,7 +1335,7 @@ const getHtml = () => `<!DOCTYPE html>
       </div>
       <div class="pricing-card animate-on-scroll stagger-3">
         <span class="pricing-plan-name">$ enterprise</span>
-        <div class="pricing-price">$9.99<span class="pricing-period">/mo</span></div>
+        <div class="pricing-price">$14.99<span class="pricing-period">/mo</span></div>
         <p class="pricing-desc">unlimited everything. custom domains. priority support.</p>
         <div class="pricing-features">
           <div class="pricing-feature"><span class="check">✓</span> unlimited pages</div>
