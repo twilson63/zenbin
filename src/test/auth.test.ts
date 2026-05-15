@@ -37,6 +37,10 @@ describe('Page Authentication', () => {
     process.env.LMDB_PATH = TEST_DB_PATH;
     initDatabase();
     signer = await createTestSigner(`auth-test-signer-${Date.now()}`);
+
+    // Upgrade test signer to enterprise so billing limits don't interfere with existing tests
+    const { updateAgentKeyPlan } = await import('../storage/db.js');
+    await updateAgentKeyPlan(signer.keyId, 'enterprise');
   });
 
   afterAll(async () => {

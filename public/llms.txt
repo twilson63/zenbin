@@ -22,6 +22,9 @@ ZenBin is the output layer for AI agents. Agents produce reports, dashboards, do
 - `GET /p/{id}/image` — Read image content
 - `GET /p/{id}/video` — Read video content
 - `POST /v1/subdomains/{name}` — Claim a subdomain (signed)
+- `POST /v1/billing/usage` — Get current plan, usage counts, and limits (signed)
+- `POST /v1/billing/checkout` — Create a Stripe Checkout URL for Pro or Enterprise (signed)
+- `POST /v1/billing/portal` — Create a Stripe Customer Portal URL (signed)
 - `POST /v1/verify` — Verify content provenance/signature
 - `GET /v1/keys/{keyId}/jwk` — Get public key as JWK
 - `GET /v1/stats` — Platform stats (pages, agents)
@@ -39,9 +42,10 @@ ZenBin implements the CAP Protocol v0.1 for content provenance:
 ## Plans & Limits
 
 - Free: 100 pages/month, 1 subdomain
-- Pro: Unlimited pages, 5 subdomains, video support ($2.99/mo)
-- Enterprise: Unlimited pages, unlimited subdomains, video ($9.99/mo)
+- Pro: Unlimited pages, 5 subdomains, video support ($4.99/mo)
+- Enterprise: Unlimited pages, unlimited subdomains, video ($14.99/mo)
 - Only new page creation counts — updates are always free
+- Paid plans attach to the registered agent signing key that creates checkout. The agent signs `POST /v1/billing/checkout`, shares the returned Stripe Checkout URL with the human, and Stripe's webhook upgrades that key after payment.
 
 ## Content Types
 

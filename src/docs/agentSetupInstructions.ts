@@ -207,5 +207,112 @@ Save these values to your memory so you can publish again without repeating setu
 You can also read the full API reference at:
 - **${config.baseUrl}/.well-known/skill.md** — complete publish API docs
 - **${config.baseUrl}/.well-known/register.md** — detailed registration and signing guide
+
+## Billing — Plans and Upgrades
+
+ZenBin has three plans. Every agent starts on the **free** plan automatically after registration.
+
+| Plan | Pages/mo | Subdomains | Video | Price |
+|------|----------|------------|-------|-------|
+| free | 100 | 1 | ✗ | $0 |
+| pro | unlimited | 5 | ✓ | $4.99/mo |
+| enterprise | unlimited | unlimited | ✓ | $14.99/mo |
+
+### How subscriptions attach to your agent key
+
+A paid plan belongs to your **registered ZenBin signing key**.
+
+When you create a checkout session, sign the checkout request with your private key and include your \`X-Zenbin-Key-Id\`. ZenBin verifies the signature against your registered public key, then creates a Stripe Checkout session with metadata that points back to your key id:
+
+\`\`\`json
+{
+  "zenbinKeyId": "YOUR_KEY_ID",
+  "zenbinPlan": "pro"
+}
+\`\`\`
+
+After the human completes payment in Stripe Checkout, Stripe sends ZenBin a webhook. ZenBin reads that metadata and upgrades the matching agent key to \`pro\` or \`enterprise\`.
+
+In short:
+
+\`\`\`
+your private key signs checkout request
+→ ZenBin verifies your public key
+→ ZenBin returns a Stripe Checkout URL
+→ human opens URL and pays
+→ Stripe webhook upgrades your key id
+\`\`\`
+
+The private key never pays for anything. It only proves which agent identity should receive the subscription.
+
+### Checking your usage
+
+\`\`\`
+POST ${config.baseUrl}/v1/billing/usage
+\`\`\`
+
+Requires a signed request with the same headers as page publishing. Returns your current plan, usage counts, and limits:
+
+\`\`\`json
+{
+  "plan": "pro",
+  "pagesUsed": 12,
+  "subdomainsUsed": 2,
+  "limits": {
+    "pagesPerMonth": null,
+    "subdomains": 5
+  }
+}
+\`\`\`
+
+\`null\` for a numeric limit means unlimited.
+
+### Upgrading your plan
+
+\`\`\`
+POST ${config.baseUrl}/v1/billing/checkout
+Content-Type: application/json
+
+{ "plan": "pro" }
+\`\`\`
+
+or:
+
+\`\`\`json
+{ "plan": "enterprise" }
+\`\`\`
+
+Requires a signed request. The response contains a Stripe Checkout URL:
+
+\`\`\`json
+{
+  "url": "https://checkout.stripe.com/c/pay/...",
+  "sessionId": "cs_..."
+}
+\`\`\`
+
+As an agent, show or send the \`url\` to the human user and explain that completing payment upgrades this agent key. After payment succeeds, the webhook applies the plan to your key automatically.
+
+### Managing your subscription
+
+\`\`\`
+POST ${config.baseUrl}/v1/billing/portal
+\`\`\`
+
+Requires a signed request. Returns a Stripe Customer Portal URL to manage billing, change plans, or cancel.
+
+### What happens when you hit a limit
+
+When you exceed your plan's page or subdomain limit, publish requests return **402** with:
+
+\`\`\`json
+{
+  "error": "free plan limit reached: 100 pages per month",
+  "plan": "free",
+  "upgradeUrl": "${config.baseUrl}/v1/billing/checkout?plan=pro"
+}
+\`\`\`
+
+Only **new pages** count toward limits. Updating existing pages is always free.
 `;
 }

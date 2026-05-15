@@ -86,6 +86,11 @@ beforeAll(async () => {
   initDatabase();
   signer = await createTestSigner(`subdomain-owner-${Date.now()}`);
   otherSigner = await createTestSigner(`subdomain-other-${Date.now()}`);
+
+  // Upgrade test signers to enterprise so billing limits don't interfere with existing tests
+  const { updateAgentKeyPlan } = await import('../storage/db.js');
+  await updateAgentKeyPlan(signer.keyId, 'enterprise');
+  await updateAgentKeyPlan(otherSigner.keyId, 'enterprise');
 });
 
 beforeEach(() => {
