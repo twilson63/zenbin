@@ -98,8 +98,8 @@ describe('POST /v1/billing/checkout', () => {
       path: '/v1/billing/checkout',
       body: {},
     }));
-    // Either 503 (Stripe not configured) or 500 (Stripe call fails)
-    expect([500, 503]).toContain(res.status);
+    // 200 when Stripe test env is configured; otherwise 503 (not configured) or 500 (Stripe call fails)
+    expect([200, 500, 503]).toContain(res.status);
   });
 
   it('should reject unsigned request', async () => {

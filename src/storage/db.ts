@@ -196,7 +196,11 @@ export async function deletePage(id: string, subdomain?: string): Promise<boolea
 }
 
 export function getPageCount(): number {
-  return getDatabase().getKeys().asArray.length;
+  let count = 0;
+  for (const _key of getDatabase().getKeys()) {
+    count += 1;
+  }
+  return count;
 }
 
 export function listPagesBySubdomain(subdomain: string): Page[] {
@@ -259,7 +263,11 @@ export async function deleteSubdomain(name: string): Promise<boolean> {
 }
 
 export function getSubdomainCount(): number {
-  return getSubdomainDatabase().getKeys().asArray.length;
+  let count = 0;
+  for (const _key of getSubdomainDatabase().getKeys()) {
+    count += 1;
+  }
+  return count;
 }
 
 export function incrementSubdomainPageCount(name: string): void {
@@ -329,12 +337,13 @@ export function listAgentKeys(): AgentKey[] {
 }
 
 export function getAgentKeyCount(status?: AgentKey['status']): number {
-  if (!status) {
-    return getAgentKeyDatabase().getKeys().asArray.length;
-  }
-
   let count = 0;
   for (const keyId of getAgentKeyDatabase().getKeys()) {
+    if (!status) {
+      count += 1;
+      continue;
+    }
+
     const record = getAgentKeyDatabase().get(keyId);
     if (record?.status === status) {
       count += 1;
