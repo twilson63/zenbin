@@ -1,0 +1,75 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --include=dev
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Create env file
+        run: |
+          cat > .env << 'EOF'
+          NODE_ENV=production
+          PORT=10000
+          HOST=0.0.0.0
+          BASE_URL=https://zenbin.org
+          LMDB_PATH=/var/data/zenbin.lmdb
+          VIDEO_STORAGE_PATH=/var/data/videos
+          MAX_PAYLOAD_SIZE=524288
+          RATE_LIMIT_WINDOW_MS=60000
+          RATE_LIMIT_MAX_REQUESTS=100
+          SUBDOMAIN_BASE_DOMAIN=zenbin.org
+          EOF
+          echo "ZENBIN_JWT_SECRET=${{ secrets.ZENBIN_JWT_SECRET }}" >> .env
+          echo "ADMIN_TOKEN=${{ secrets.ADMIN_TOKEN }}" >> .env
+
+      - name: Copy files to server
+        uses: appleboy/scp-action@v0
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          source: "dist/,package.json,package-lock.json,public/,.env"
+          target: "/opt/zenbin"
+          strip_components: 0
+
+      - name: Deploy and restart
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/zenbin
+            npm ci --omit=dev
+            systemctl restart zenbin
+            sleep 3
+            systemctl status zenbin --no-pager
+
+      - name: Health check
+        run: |
+          sleep 5
+          curl -sf http://${{ secrets.DO_HOST }}/health || curl -sf http://${{ secrets.DO_HOST }}:10000/health || exit 1
+          echo "✅ Health check passed"
