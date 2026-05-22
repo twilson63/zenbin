@@ -84,6 +84,19 @@ export async function requireSignedAgent(c: Context, next: Next) {
     return;
   }
 
+  return verifySignedRequest(c, next);
+}
+
+/**
+ * Verify signed request for GET endpoints (listing, etc.)
+ * Same as requireSignedAgent but doesn't skip for non-write methods.
+ */
+export async function requireSignedAgentForGet(c: Context, next: Next) {
+  return verifySignedRequest(c, next);
+}
+
+async function verifySignedRequest(c: Context, next: Next) {
+
   const headers = getSignedHeaders(c);
   if (!hasAllHeaders(headers)) {
     return reject(c, 401, 'Signed request headers are required');

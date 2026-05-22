@@ -1,11 +1,15 @@
 import { Hono } from 'hono';
-import { getAgentKey } from '../storage/db.js';
-import { verifyEd25519Signature, buildCanonicalRequest, normalizeSignatureHeader, decodeBase64Url } from '../utils/httpSignature.js';
+import { verifyEd25519Signature, buildCanonicalRequest, decodeBase64Url } from '../utils/httpSignature.js';
 import { createHash } from 'crypto';
+import type { Services } from '../services/container.js';
 
 type StoredJwk = Record<string, string | boolean | undefined>;
 
 const verify = new Hono();
+
+function getServices(c: any): Services {
+  return c.get('services');
+}
 
 interface VerifyRequestBody {
   keyId: string;
@@ -39,7 +43,8 @@ verify.post('/', async (c) => {
     return c.json({ error: 'signature is required' }, 400);
   }
 
-  const agentKey = getAgentKey(body.keyId);
+  const services = getServices(c);
+  const agentKey = services.keys.get(body.keyId);
 
   if (!agentKey) {
     return c.json({ error: 'Key not found' }, 404);

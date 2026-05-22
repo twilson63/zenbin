@@ -1,5 +1,7 @@
 /**
  * KeyService — wraps agent key storage operations
+ *
+ * Provides billing-aware helpers for plan limit checks and cycle resets.
  */
 
 import {
@@ -13,7 +15,9 @@ import {
   incrementAgentKeyUsage,
   resetAgentKeyUsage,
 } from '../storage/db.js';
-import type { AgentKey, Plan } from '../types.js';
+import { checkPageLimit, checkSubdomainLimit, getPlanFromKey, isBillingCycleExpired } from '../rules.js';
+import { config } from '../config.js';
+import type { AgentKey, Plan, LimitCheckResult } from '../types.js';
 import type { IKeyService } from './interfaces.js';
 
 export class KeyService implements IKeyService {
@@ -57,5 +61,39 @@ export class KeyService implements IKeyService {
 
   async resetUsage(keyId: string): Promise<void> {
     return resetAgentKeyUsage(keyId);
+  }
+
+  /**
+   * Get the plan for a given key ID. Returns 'free' if key not found.
+   */
+  getPlan(keyId: string): Plan {
+    const agentKey = dbGetAgentKey(keyId);
+    return agentKey ? getPlanFromKey(agentKey) : 'free';
+  }
+
+  /**
+   * Check if a page publish is allowed for this key.
+   * Only counts new pages — updates to existing pages are always allowed.
+   */
+  checkPageLimit(keyId: string, id: string, subdomain?: string): LimitCheckResult {
+    const agentKey = dbGetAgentKey(keyId);
+    const plan = agentKey ? getPlanFromKey(agentKey) : 'free';
+    return checkPageLimit(plan, agentKey?.monthlyPageCount || 0);
+  }
+
+  /**
+   * Check and reset billing cycle if expired, then return the fresh key.
+   * Returns undefined if key not found.
+   */
+  async checkAndResetCycle(keyId: string): Promise<AgentKey | undefined> {
+    let agentKey = dbGetAgentKey(keyId);
+    if (!agentKey) return undefined;
+
+    if (isBillingCycleExpired(agentKey.billingCycleStart, config.freeTier.monthlyWindowMs)) {
+      await resetAgentKeyUsage(keyId);
+      agentKey = dbGetAgentKey(keyId);
+    }
+
+    return agentKey;
   }
 }

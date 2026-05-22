@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { config } from './config.js';
 import { initDatabase, closeDatabase } from './storage/db.js';
 import { initVideoStorage } from './storage/video.js';
+import { createServices, type Services } from './services/container.js';
 import { pages } from './routes/pages.js';
 import { render } from './routes/render.js';
 import { agent } from './routes/agent.js';
@@ -27,14 +28,24 @@ import { verify } from './routes/verify.js';
 // Type for context variables
 type Variables = {
   subdomain: string;
+  services: Services;
 };
 
 const app = new Hono<{ Variables: Variables }>();
+
+// Initialize services
+const services = createServices();
 
 // Middleware
 app.use('*', logger());
 app.use('*', cors());
 app.use('*', rateLimit);
+
+// Inject services into request context
+app.use('*', async (c, next) => {
+  c.set('services', services);
+  await next();
+});
 
 // Subdomain detection middleware
 app.use('*', async (c, next) => {

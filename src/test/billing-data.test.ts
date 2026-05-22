@@ -13,7 +13,7 @@ import { rmSync } from 'fs';
 import { billingService } from '../services/billingService.js';
 
 const TEST_DB_PATH = './data/test-billing-data.lmdb';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index'];
 
 beforeAll(() => {
   for (const suffix of TEST_DB_SUFFIXES) {

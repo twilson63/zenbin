@@ -14,6 +14,7 @@ import {
   incrementAgentKeyUsage,
   getAgentKey,
 } from '../storage/db.js';
+import { config } from '../config.js';
 import { checkSubdomainLimit, getPlanFromKey } from '../rules.js';
 import type { Subdomain, SubdomainResult, LimitCheckResult } from '../types.js';
 import type { ISubdomainService } from './interfaces.js';
@@ -60,5 +61,29 @@ export class SubdomainService implements ISubdomainService {
    */
   trackSubdomainClaim(keyId: string): void {
     incrementAgentKeyUsage(keyId, 'monthlySubdomainCount');
+  }
+
+  /**
+   * Validate a subdomain name.
+   * Delegates to the same rules used in the subdomain route.
+   */
+  validateName(name: string): { valid: boolean; error?: string } {
+    const RESERVED_NAMES = new Set(config.subdomains.reservedNames);
+    const SUBDOMAIN_PATTERN = /^[a-z][a-z0-9-]*[a-z0-9]$/;
+
+    if (name.length < 3) {
+      return { valid: false, error: 'Subdomain must be at least 3 characters' };
+    }
+    if (name.length > config.subdomains.maxLength) {
+      return { valid: false, error: `Subdomain must be at most ${config.subdomains.maxLength} characters` };
+    }
+    if (!SUBDOMAIN_PATTERN.test(name)) {
+      return { valid: false, error: 'Subdomain must start with a letter, contain only lowercase letters, numbers, and hyphens, and end with a letter or number' };
+    }
+    if (RESERVED_NAMES.has(name)) {
+      return { valid: false, error: `Subdomain '${name}' is reserved` };
+    }
+
+    return { valid: true };
   }
 }

@@ -32,6 +32,22 @@ let subdomainDb: Database<Subdomain, string>;
 let agentKeyDb: Database<AgentKey, string>;
 let nonceDb: Database<NonceRecord, string>;
 let auditLogDb: Database<AuditLogRecord, string>;
+let ownerIndexDb: Database<PageSummary, string>;
+
+// PageSummary — lightweight metadata for listing, never includes content
+export interface PageSummary {
+  id: string;
+  subdomain: string | null;
+  title?: string;
+  content_type?: string;
+  has_markdown: boolean;
+  has_image: boolean;
+  has_video: boolean;
+  ownerKeyId: string;
+  created_at: string;
+  updated_at: string;
+  etag: string;
+}
 
 export function initDatabase(): {
   pages: Database<Page, string>;
@@ -39,6 +55,7 @@ export function initDatabase(): {
   agentKeys: Database<AgentKey, string>;
   nonces: Database<NonceRecord, string>;
   auditLogs: Database<AuditLogRecord, string>;
+  ownerIndex: Database<PageSummary, string>;
 } {
   if (!db) {
     db = open<Page, string>({
@@ -70,6 +87,12 @@ export function initDatabase(): {
       compression: true,
     });
   }
+  if (!ownerIndexDb) {
+    ownerIndexDb = open<PageSummary, string>({
+      path: `${config.lmdbPath}-owner-index`,
+      compression: true,
+    });
+  }
 
   return {
     pages: db,
@@ -77,6 +100,7 @@ export function initDatabase(): {
     agentKeys: agentKeyDb,
     nonces: nonceDb,
     auditLogs: auditLogDb,
+    ownerIndex: ownerIndexDb,
   };
 }
 
@@ -113,6 +137,13 @@ export function getAuditLogDatabase(): Database<AuditLogRecord, string> {
     throw new Error('Database not initialized. Call initDatabase() first.');
   }
   return auditLogDb;
+}
+
+export function getOwnerIndexDatabase(): Database<PageSummary, string> {
+  if (!ownerIndexDb) {
+    throw new Error('Database not initialized. Call initDatabase() first.');
+  }
+  return ownerIndexDb;
 }
 
 function pageStorageKey(id: string, subdomain?: string): string {
@@ -186,6 +217,9 @@ export async function savePage(
 
   pagesDb.putSync(key, page);
 
+  // Update owner index
+  addPageToOwnerIndex(page);
+
   return {
     page,
     created: !existing,
@@ -204,6 +238,10 @@ export async function deletePage(id: string, subdomain?: string): Promise<boolea
     return false;
   }
   pagesDb.removeSync(key);
+
+  // Remove from owner index
+  removePageFromOwnerIndex(existing);
+
   return true;
 }
 
@@ -452,6 +490,80 @@ export function listAuditLogsForKey(keyId: string): AuditLogRecord[] {
   return logs.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
+// ─── Owner Index ──────────────────────────────────────────
+
+function ownerIndexKey(page: Page): string {
+  const suffix = page.subdomain ? `${page.subdomain}:${page.id}` : page.id;
+  return `${page.ownerKeyId}/${suffix}`;
+}
+
+export function addPageToOwnerIndex(page: Page): void {
+  if (!page.ownerKeyId) return;
+  const idxDb = getOwnerIndexDatabase();
+  const key = ownerIndexKey(page);
+  const summary: PageSummary = {
+    id: page.id,
+    subdomain: page.subdomain ?? null,
+    title: page.title,
+    content_type: page.content_type,
+    has_markdown: !!page.markdown,
+    has_image: !!page.image,
+    has_video: !!page.video,
+    ownerKeyId: page.ownerKeyId,
+    created_at: page.created_at,
+    updated_at: page.updated_at,
+    etag: page.etag,
+  };
+  idxDb.putSync(key, summary);
+}
+
+export function removePageFromOwnerIndex(page: Page): void {
+  if (!page.ownerKeyId) return;
+  const idxDb = getOwnerIndexDatabase();
+  const key = ownerIndexKey(page);
+  try {
+    idxDb.removeSync(key);
+  } catch {
+    // Key may not exist if page predates owner index
+  }
+}
+
+export function listPagesByOwner(
+  ownerKeyId: string,
+  cursor?: string,
+  limit: number = 50,
+): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+  const idxDb = getOwnerIndexDatabase();
+  const prefix = `${ownerKeyId}/`;
+  const pages: PageSummary[] = [];
+  let total = 0;
+  let startAfterKey: string | undefined;
+
+  if (cursor) {
+    startAfterKey = cursor;
+  }
+
+  for (const key of idxDb.getKeys({ start: prefix })) {
+    if (!key.startsWith(prefix)) break;
+    total++;
+
+    if (startAfterKey && key <= startAfterKey) {
+      continue;
+    }
+
+    if (pages.length < limit) {
+      const summary = idxDb.get(key);
+      if (summary) {
+        pages.push(summary);
+      }
+    }
+  }
+
+  const nextCursor = total > pages.length ? pages[pages.length - 1] ? `${prefix}${pages[pages.length - 1].subdomain ? pages[pages.length - 1].subdomain + ':' : ''}${pages[pages.length - 1].id}` : null : null;
+
+  return { pages, total, next_cursor: nextCursor };
+}
+
 // ─── Billing-Related Storage ───────────────────────────────
 
 export async function updateAgentKeyPlan(
@@ -522,5 +634,9 @@ export async function closeDatabase(): Promise<void> {
   if (auditLogDb) {
     await auditLogDb.close();
     auditLogDb = undefined as unknown as Database<AuditLogRecord, string>;
+  }
+  if (ownerIndexDb) {
+    await ownerIndexDb.close();
+    ownerIndexDb = undefined as unknown as Database<PageSummary, string>;
   }
 }

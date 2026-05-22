@@ -4,7 +4,7 @@ import { rmSync } from 'fs';
 
 const TEST_DB_PATH = './data/test.lmdb';
 const TEST_VIDEO_PATH = './data/test-videos';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index'];
 
 beforeAll(() => {
   process.env.NODE_ENV = 'test';

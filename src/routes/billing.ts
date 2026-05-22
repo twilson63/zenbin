@@ -9,11 +9,11 @@
 
 import { Hono } from 'hono';
 import { config } from '../config.js';
-import { getAgentKey } from '../storage/db.js';
 import { requireSignedAgent } from '../middleware/signedAgent.js';
 import { billingService } from '../services/billingService.js';
 import { PLAN_LIMITS } from '../rules.js';
 import type { Plan } from '../types.js';
+import type { Services } from '../services/container.js';
 
 const billing = new Hono();
 
@@ -79,7 +79,7 @@ billing.post('/portal', async (c) => {
     return c.json({ error: 'Signed request required' }, 401);
   }
 
-  const agentKey = getAgentKey(signedAgent.key.keyId);
+  const agentKey = c.get('services').keys.get(signedAgent.key.keyId);
   if (!agentKey?.stripeCustomerId) {
     return c.json({ error: 'No billing account found. Subscribe first.' }, 404);
   }

@@ -1,8 +1,12 @@
 import { Hono } from 'hono';
-import { getAgentKey, saveAgentKey, saveAuditLog } from '../storage/db.js';
 import { validateEd25519PublicJwk } from '../utils/httpSignature.js';
+import type { Services } from '../services/container.js';
 
 const keys = new Hono();
+
+function getServices(c: any): Services {
+  return c.get('services');
+}
 
 keys.post('/register', async (c) => {
   let body: {
@@ -41,19 +45,20 @@ keys.post('/register', async (c) => {
     return c.json({ error: 'publicJwk must be a valid Ed25519 public JWK' }, 400);
   }
 
-  const existing = getAgentKey(trimmedKeyId);
+  const services = getServices(c);
+  const existing = services.keys.get(trimmedKeyId);
   if (existing) {
     return c.json({ error: `Signing key '${trimmedKeyId}' already exists` }, 409);
   }
 
-  const key = await saveAgentKey({
+  const key = await services.keys.save({
     keyId: trimmedKeyId,
     publicJwk: body.publicJwk,
     scopes: [],
     status: 'active',
   });
 
-  await saveAuditLog({
+  await services.audit.save({
     action: 'self_register_key',
     targetType: 'agent_key',
     keyId: key.keyId,
@@ -75,7 +80,8 @@ keys.post('/register', async (c) => {
 // GET /:keyId/jwk — Get the public JWK for a signing key (provenance verification)
 keys.get('/:keyId/jwk', (c) => {
   const keyId = decodeURIComponent(c.req.param('keyId'));
-  const agentKey = getAgentKey(keyId);
+  const services = getServices(c);
+  const agentKey = services.keys.get(keyId);
 
   if (!agentKey) {
     return c.json({ error: 'Key not found' }, 404);

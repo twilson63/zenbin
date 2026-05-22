@@ -4,11 +4,17 @@ import { billing } from '../routes/billing.js';
 import { initDatabase, closeDatabase, saveAgentKey, getAgentKey, updateAgentKeyPlan } from '../storage/db.js';
 import { rmSync } from 'fs';
 import { createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
+import { createServices, type Services } from '../services/container.js';
 
 const TEST_DB_PATH = './data/test-billing-routes.lmdb';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index'];
 
-const app = new Hono();
+const services = createServices();
+const app = new Hono<{ Variables: { services: Services } }>();
+app.use('*', async (c, next) => {
+  c.set('services', services);
+  await next();
+});
 app.route('/v1/billing', billing);
 
 let freeSigner: TestSigner;
