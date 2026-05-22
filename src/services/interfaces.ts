@@ -48,6 +48,7 @@ export interface IPageService {
   delete(id: string, subdomain?: string): Promise<boolean>;
   count(): number;
   listBySubdomain(subdomain: string): Page[];
+  listBySubdomainPaginated(subdomain: string, cursor?: string, limit?: number): { pages: PageSummary[]; total: number; next_cursor: string | null };
 
   // Billing-aware helpers
   checkPublishLimit(keyId: string, id: string, subdomain?: string): LimitCheckResult;

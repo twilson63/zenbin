@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { ErrorCodes, errorResponse } from '../errors.js';
 import { requireAdmin } from '../middleware/adminAuth.js';
 import type { Services } from '../services/container.js';
 
@@ -30,21 +31,21 @@ adminKeys.post('/', async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return c.json({ error: 'Invalid JSON body' }, 400);
+    return errorResponse(ErrorCodes.INVALID_JSON, 'Invalid JSON body', 400);
   }
 
   if (!body.keyId || typeof body.keyId !== 'string') {
-    return c.json({ error: 'keyId is required' }, 400);
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'keyId is required', 400);
   }
 
   if (!body.publicJwk || typeof body.publicJwk !== 'object') {
-    return c.json({ error: 'publicJwk is required' }, 400);
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'publicJwk is required', 400);
   }
 
   const services = getServices(c);
   const existing = services.keys.get(body.keyId);
   if (existing) {
-    return c.json({ error: `Signing key '${body.keyId}' already exists` }, 409);
+    return errorResponse(ErrorCodes.KEY_ALREADY_EXISTS, `Signing key '${body.keyId}' already exists`, 409);
   }
 
   const key = await services.keys.save({
@@ -80,16 +81,16 @@ adminKeys.patch('/:keyId', async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return c.json({ error: 'Invalid JSON body' }, 400);
+    return errorResponse(ErrorCodes.INVALID_JSON, 'Invalid JSON body', 400);
   }
 
   if (!body.status || !['active', 'blocked', 'revoked'].includes(body.status)) {
-    return c.json({ error: 'status must be one of: active, blocked, revoked' }, 400);
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'status must be one of: active, blocked, revoked', 400);
   }
 
   const existing = services.keys.get(keyId);
   if (!existing) {
-    return c.json({ error: 'Key not found' }, 404);
+    return errorResponse(ErrorCodes.KEY_NOT_FOUND, 'Key not found', 404);
   }
 
   const updated = await services.keys.updateStatus(keyId, body.status as 'active' | 'blocked' | 'revoked', body.reason);
@@ -115,7 +116,7 @@ adminKeys.get('/:keyId', (c) => {
   const services = getServices(c);
   const key = services.keys.get(keyId);
   if (!key) {
-    return c.json({ error: 'Signing key not found' }, 404);
+    return errorResponse(ErrorCodes.KEY_NOT_FOUND, 'Signing key not found', 404);
   }
   return c.json(key);
 });
@@ -126,7 +127,7 @@ adminKeys.get('/:keyId/activity', (c) => {
   const services = getServices(c);
   const key = services.keys.get(keyId);
   if (!key) {
-    return c.json({ error: 'Signing key not found' }, 404);
+    return errorResponse(ErrorCodes.KEY_NOT_FOUND, 'Signing key not found', 404);
   }
   const activity = services.audit.listForKey(keyId);
   return c.json({ key, activity });
@@ -139,7 +140,7 @@ adminKeys.get('/:keyId/audit', async (c) => {
 
   const existing = services.keys.get(keyId);
   if (!existing) {
-    return c.json({ error: 'Key not found' }, 404);
+    return errorResponse(ErrorCodes.KEY_NOT_FOUND, 'Key not found', 404);
   }
 
   const logs = services.audit.listForKey(keyId);
@@ -165,7 +166,7 @@ async function changeKeyStatus(
       body = await c.req.json();
     }
   } catch {
-    return c.json({ error: 'Invalid JSON body' }, 400);
+    return errorResponse(ErrorCodes.INVALID_JSON, 'Invalid JSON body', 400);
   }
 
   const keyId = c.req.param('keyId')!;
@@ -173,7 +174,7 @@ async function changeKeyStatus(
   const updated = await services.keys.updateStatus(keyId, status, body.reason);
 
   if (!updated) {
-    return c.json({ error: 'Signing key not found' }, 404);
+    return errorResponse(ErrorCodes.KEY_NOT_FOUND, 'Signing key not found', 404);
   }
 
   await services.audit.save({

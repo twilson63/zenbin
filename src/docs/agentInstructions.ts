@@ -329,6 +329,65 @@ Notes:
 
 ## Updating pages correctly
 
+### Listing your pages
+
+\`\`\`
+GET /v1/pages
+\`\`\`
+
+Requires a signed request. Returns all pages owned by the authenticated key, with cursor-based pagination.
+
+**Query parameters:**
+
+| Parameter | Type | Default | Max | Description |
+|-----------|------|---------|-----|------------- |
+| `limit` | integer | 50 | 200 | Number of pages per request |
+| `cursor` | string | - | - | Opaque cursor from the previous response |
+
+**Response:**
+
+\`\`\`json
+{
+  "pages": [
+    {
+      "id": "my-report",
+      "url": "https://zenbin.org/p/my-report",
+      "title": "Q3 Report",
+      "content_type": "text/html; charset=utf-8",
+      "has_markdown": true,
+      "has_image": false,
+      "has_video": false,
+      "subdomain": null,
+      "created_at": "...",
+      "updated_at": "...",
+      "etag": "..."
+    }
+  ],
+  "total": 42,
+  "next_cursor": "opaque-cursor-value"
+}
+\`\`\`
+
+- `subdomain` is `null` for standalone pages, the subdomain name for subdomain pages.
+- `next_cursor` is `null` when there are no more pages.
+- Response contains metadata only — no HTML, Markdown, image, or video content.
+
+### Deleting a page
+
+\`\`\`
+DELETE /v1/pages/{id}
+\`\`\`
+
+Must be signed by the owning key. Returns `200 OK` with a confirmation body:
+
+\`\`\`json
+{
+  "id": "my-page",
+  "deleted": true,
+  "deleted_at": "2026-05-22T16:00:00.000Z"
+}
+\`\`\`
+
 ### Standalone pages
 
 To update a standalone page:
@@ -366,11 +425,56 @@ Returns metadata and page count.
 
 ### GET /v1/subdomains/{name}/pages
 
-Returns pages currently published in the subdomain.
+Returns pages currently published in the subdomain. Supports cursor-based pagination.
+
+**Query parameters:**
+
+| Parameter | Type | Default | Max | Description |
+|-----------|------|---------|-----|------------- |
+| `limit` | integer | 50 | 200 | Number of pages to return per request |
+| `cursor` | string | - | - | Opaque cursor from the previous response to fetch the next page |
+
+**Response:**
+
+\`\`\`json
+{
+  "subdomain": "my-sub",
+  "url": "https://my-sub.zenbin.org",
+  "pages": [
+    {
+      "id": "index",
+      "path": "/",
+      "title": "Home",
+      "url": "https://my-sub.zenbin.org/",
+      "has_markdown": false,
+      "has_image": false,
+      "has_video": false,
+      "created_at": "...",
+      "updated_at": "...",
+      "etag": "..."
+    }
+  ],
+  "total": 42,
+  "next_cursor": "opaque-cursor-value"
+}
+\`\`\`
+
+- `next_cursor` is `null` when there are no more pages.
+- Each page summary includes metadata only — no HTML, Markdown, image, or video content.
 
 ### DELETE /v1/subdomains/{name}
 
 Deletes the subdomain and its pages. Must be signed by the owning key or an override-capable key.
+
+**Response:** `200 OK`
+
+\`\`\`json
+{
+  "name": "my-sub",
+  "deleted": true,
+  "deleted_at": "2026-05-22T16:00:00.000Z"
+}
+\`\`\`
 
 ### Video
 
@@ -745,6 +849,55 @@ POST /v1/billing/portal
 \`\`\`
 
 Share the returned portal URL with the human if they need to update payment details, change plans, or cancel.
+
+## Error codes
+
+All error responses include both a human-readable \`error\` string and a machine-readable \`error_code\` string:
+
+\`\`\`json
+{
+  "error": "Page not found",
+  "error_code": "PAGE_NOT_FOUND"
+}
+\`\`\`
+
+Agents should switch on \`error_code\` for programmatic handling. The \`error\` message is for human readability and may change.
+
+| error_code | HTTP | Description |
+|------------|------|-------------|
+| PAGE_NOT_FOUND | 404 | Page does not exist |
+| PAGE_LIMIT_EXCEEDED | 402 | Monthly page limit reached for this plan |
+| PAGE_OWNERSHIP_REQUIRED | 403 | Signing key does not own this page |
+| PAGE_PREDATES_OWNERSHIP | 403 | Page predates signed ownership |
+| PAGE_AUTH_REQUIRED | 401 | Password authentication required |
+| PAGE_INVALID_CREDENTIALS | 401 | Wrong password |
+| PAGE_AUTH_RATE_LIMITED | 429 | Too many failed auth attempts |
+| PAGE_INVALID_ID | 400 | Invalid page ID |
+| PAGE_INVALID_BODY | 400 | Invalid request body |
+| PAGE_INVALID_AUTH | 400 | Invalid auth parameters |
+| SUBDOMAIN_NOT_FOUND | 404 | Subdomain does not exist |
+| SUBDOMAIN_TAKEN | 409 | Subdomain name already claimed |
+| SUBDOMAIN_LIMIT_EXCEEDED | 402 | Monthly subdomain limit reached |
+| SUBDOMAIN_OWNERSHIP_REQUIRED | 403 | Signing key does not control this subdomain |
+| SUBDOMAIN_PREDATES_OWNERSHIP | 403 | Subdomain predates signed ownership |
+| SUBDOMAIN_INVALID_NAME | 400 | Invalid subdomain name |
+| SUBDOMAIN_MAX_PAGES_EXCEEDED | 403 | Subdomain page limit reached |
+| KEY_NOT_FOUND | 404 | Signing key not found |
+| KEY_ALREADY_EXISTS | 409 | Key already registered |
+| KEY_BLOCKED | 403 | Key has been blocked |
+| KEY_REVOKED | 410 | Key has been revoked |
+| SIGNING_HEADERS_REQUIRED | 401 | Missing signed request headers |
+| UNKNOWN_SIGNING_KEY | 401 | Key not registered |
+| INVALID_SIGNATURE | 401 | Request signature verification failed |
+| INVALID_TIMESTAMP | 401 | Timestamp outside allowed window |
+| CONTENT_DIGEST_MISMATCH | 401 | Content digest verification failed |
+| NONCE_ALREADY_USED | 401 | Nonce has already been used |
+| INVALID_JSON | 400 | Invalid JSON in request body |
+| INVALID_REQUEST | 400 | Invalid request parameters |
+| RATE_LIMITED | 429 | Too many requests |
+| BILLING_STRIPE_NOT_CONFIGURED | 503 | Billing not configured on server |
+| BILLING_KEY_NOT_FOUND | 404 | No billing account found |
+| BILLING_INVALID_PLAN | 400 | Invalid plan specified |
 
 ## Practical advice for agents
 

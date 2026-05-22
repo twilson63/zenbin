@@ -270,6 +270,53 @@ export function listPagesBySubdomain(subdomain: string): Page[] {
   return pages;
 }
 
+export function listPagesBySubdomainPaginated(
+  subdomain: string,
+  cursor?: string,
+  limit: number = 50,
+): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+  const pagesDb = getDatabase();
+  const prefix = `${subdomain}:`;
+  const pages: PageSummary[] = [];
+  let total = 0;
+
+  // Cursor is the last page ID (within this subdomain) from the previous page
+  const startAfterKey = cursor ? `${subdomain}:${cursor}` : undefined;
+
+  for (const key of pagesDb.getKeys({ start: prefix })) {
+    if (!key.startsWith(prefix)) break;
+    total++;
+
+    if (startAfterKey && key <= startAfterKey) {
+      continue;
+    }
+
+    if (pages.length < limit) {
+      const page = pagesDb.get(key);
+      if (page) {
+        pages.push({
+          id: page.id,
+          subdomain: page.subdomain ?? null,
+          title: page.title,
+          content_type: page.content_type,
+          has_markdown: !!page.markdown,
+          has_image: !!page.image,
+          has_video: !!page.video,
+          ownerKeyId: page.ownerKeyId || '',
+          created_at: page.created_at,
+          updated_at: page.updated_at,
+          etag: page.etag,
+        });
+      }
+    }
+  }
+
+  const lastPage = pages.length > 0 ? pages[pages.length - 1] : null;
+  const nextCursor = total > pages.length && lastPage ? lastPage.id : null;
+
+  return { pages, total, next_cursor: nextCursor };
+}
+
 export async function saveSubdomain(name: string, ownerKeyId?: string): Promise<SubdomainResult> {
   const existing = getSubdomainDatabase().get(name);
   const now = nowIso();

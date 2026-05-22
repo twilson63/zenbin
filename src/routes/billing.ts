@@ -13,6 +13,7 @@ import { requireSignedAgent } from '../middleware/signedAgent.js';
 import { billingService } from '../services/billingService.js';
 import { PLAN_LIMITS } from '../rules.js';
 import type { Plan } from '../types.js';
+import { ErrorCodes, errorResponse } from '../errors.js';
 import type { Services } from '../services/container.js';
 
 const billing = new Hono();
@@ -26,7 +27,7 @@ billing.use('/portal', requireSignedAgent);
 billing.post('/usage', async (c) => {
   const signedAgent = c.get('signedAgent');
   if (!signedAgent) {
-    return c.json({ error: 'Signed request required' }, 401);
+    return errorResponse(ErrorCodes.SIGNING_HEADERS_REQUIRED, 'Signed request required', 401);
   }
 
   const keyId = signedAgent.key.keyId;
@@ -35,7 +36,7 @@ billing.post('/usage', async (c) => {
     const usage = await billingService.getUsage(keyId);
     return c.json(usage);
   } catch (err: any) {
-    return c.json({ error: err.message }, 404);
+    return errorResponse(ErrorCodes.BILLING_KEY_NOT_FOUND, err.message, 404);
   }
 });
 
@@ -43,7 +44,7 @@ billing.post('/usage', async (c) => {
 billing.post('/checkout', async (c) => {
   const signedAgent = c.get('signedAgent');
   if (!signedAgent) {
-    return c.json({ error: 'Signed request required' }, 401);
+    return errorResponse(ErrorCodes.SIGNING_HEADERS_REQUIRED, 'Signed request required', 401);
   }
 
   let body: { plan?: string };
@@ -55,11 +56,11 @@ billing.post('/checkout', async (c) => {
 
   const plan = (body.plan || 'pro') as Plan;
   if (!PLAN_LIMITS[plan] || plan === 'free') {
-    return c.json({ error: 'Invalid plan. Choose "pro" or "enterprise".' }, 400);
+    return errorResponse(ErrorCodes.BILLING_INVALID_PLAN, 'Invalid plan. Choose "pro" or "enterprise".', 400);
   }
 
   if (!config.stripe.secretKey) {
-    return c.json({ error: 'Billing is not configured on this server.' }, 503);
+    return errorResponse(ErrorCodes.BILLING_STRIPE_NOT_CONFIGURED, 'Billing is not configured on this server.', 503);
   }
 
   const keyId = signedAgent.key.keyId;
@@ -68,7 +69,7 @@ billing.post('/checkout', async (c) => {
     const session = await billingService.createCheckoutSession(keyId, plan);
     return c.json({ url: session.url, sessionId: session.sessionId });
   } catch (err: any) {
-    return c.json({ error: err.message }, 500);
+    return errorResponse(ErrorCodes.INVALID_REQUEST, err.message, 500);
   }
 });
 
@@ -76,23 +77,23 @@ billing.post('/checkout', async (c) => {
 billing.post('/portal', async (c) => {
   const signedAgent = c.get('signedAgent');
   if (!signedAgent) {
-    return c.json({ error: 'Signed request required' }, 401);
+    return errorResponse(ErrorCodes.SIGNING_HEADERS_REQUIRED, 'Signed request required', 401);
   }
 
   const agentKey = c.get('services').keys.get(signedAgent.key.keyId);
   if (!agentKey?.stripeCustomerId) {
-    return c.json({ error: 'No billing account found. Subscribe first.' }, 404);
+    return errorResponse(ErrorCodes.BILLING_KEY_NOT_FOUND, 'No billing account found. Subscribe first.', 404);
   }
 
   if (!config.stripe.secretKey) {
-    return c.json({ error: 'Billing is not configured on this server.' }, 503);
+    return errorResponse(ErrorCodes.BILLING_STRIPE_NOT_CONFIGURED, 'Billing is not configured on this server.', 503);
   }
 
   try {
     const session = await billingService.createPortalSession(agentKey.stripeCustomerId);
     return c.json({ url: session.url });
   } catch (err: any) {
-    return c.json({ error: err.message }, 500);
+    return errorResponse(ErrorCodes.INVALID_REQUEST, err.message, 500);
   }
 });
 
@@ -101,14 +102,14 @@ billing.post('/portal', async (c) => {
 
 billing.post('/webhook', async (c) => {
   if (!config.stripe.webhookSecret) {
-    return c.json({ error: 'Webhook not configured' }, 503);
+    return errorResponse(ErrorCodes.BILLING_STRIPE_NOT_CONFIGURED, 'Webhook not configured', 503);
   }
 
   const body = await c.req.text();
   const signature = c.req.header('Stripe-Signature');
 
   if (!signature) {
-    return c.json({ error: 'Missing Stripe-Signature header' }, 400);
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'Missing Stripe-Signature header', 400);
   }
 
   // Verify webhook signature
@@ -118,7 +119,7 @@ billing.post('/webhook', async (c) => {
     const stripe = new Stripe(config.stripe.secretKey);
     event = stripe.webhooks.constructEvent(body, signature, config.stripe.webhookSecret);
   } catch (err: any) {
-    return c.json({ error: `Webhook signature verification failed: ${err.message}` }, 400);
+    return errorResponse(ErrorCodes.INVALID_REQUEST, `Webhook signature verification failed: ${err.message}`, 400);
   }
 
   try {
@@ -126,7 +127,7 @@ billing.post('/webhook', async (c) => {
     return c.json({ received: true });
   } catch (err: any) {
     console.error('Webhook handling error:', err);
-    return c.json({ error: err.message }, 500);
+    return errorResponse(ErrorCodes.INVALID_REQUEST, err.message, 500);
   }
 });
 

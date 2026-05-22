@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
 import { hasScope, requireSignedAgent, requireSignedAgentForGet } from '../middleware/signedAgent.js';
 import { checkPageLimit, getPlanFromKey, isBillingCycleExpired } from '../rules.js';
+import { ErrorCodes, errorResponse } from '../errors.js';
 import { generateEtag } from '../utils/etag.js';
 import { generateUrlToken, hashPassword, parseBasicAuth, verifyPassword } from '../utils/auth.js';
 import { decodeHtml, decodeMarkdown, validateAuthInput, validateId, validatePageBody } from '../utils/validation.js';
@@ -105,7 +106,7 @@ async function verifyPageWriteAuth(c: Context, id: string, subdomain: string | u
   const rateLimit = checkAuthRateLimit(id);
   if (!rateLimit.allowed) {
     c.header('Retry-After', String(rateLimit.retryAfter));
-    return c.json({ error: 'Too many failed authentication attempts' }, 429);
+    return errorResponse(ErrorCodes.PAGE_AUTH_RATE_LIMITED, 'Too many failed authentication attempts', 429);
   }
 
   const authHeader = c.req.header('Authorization');
@@ -114,13 +115,13 @@ async function verifyPageWriteAuth(c: Context, id: string, subdomain: string | u
 
   if (!basicAuth) {
     c.header('WWW-Authenticate', `Basic realm="${realm}"`);
-    return c.json({ error: 'Authentication required for this page' }, 401);
+    return errorResponse(ErrorCodes.PAGE_AUTH_REQUIRED, 'Authentication required for this page', 401);
   }
 
   const validPassword = await verifyPassword(basicAuth.password, passwordHash);
   if (!validPassword) {
     recordFailedAttempt(id);
-    return c.json({ error: 'Invalid credentials' }, 401);
+    return errorResponse(ErrorCodes.PAGE_INVALID_CREDENTIALS, 'Invalid credentials', 401);
   }
 
   resetAuthAttempts(id);
@@ -136,27 +137,27 @@ pages.post('/:id', async (c) => {
 
   const idError = validateId(id);
   if (idError) {
-    return c.json({ error: idError.message }, 400);
+    return errorResponse(ErrorCodes.PAGE_INVALID_ID, idError.message, 400);
   }
 
   if (subdomain) {
     const subdomainValidation = validateSubdomainName(subdomain);
     if (!subdomainValidation.valid) {
-      return c.json({ error: subdomainValidation.error }, 400);
+      return errorResponse(ErrorCodes.SUBDOMAIN_INVALID_NAME, subdomainValidation.error, 400);
     }
 
     const existingSubdomain = services.subdomains.get(subdomain);
     if (!existingSubdomain) {
-      return c.json({ error: `Subdomain '${subdomain}' does not exist. Claim it first with POST /v1/subdomains/${subdomain}` }, 404);
+      return errorResponse(ErrorCodes.SUBDOMAIN_NOT_FOUND, `Subdomain '${subdomain}' does not exist. Claim it first with POST /v1/subdomains/${subdomain}`, 404);
     }
 
     const canManageSubdomain = existingSubdomain.ownerKeyId === keyId || currentKeyCanOverride(c, 'subdomains:write:any');
     if (!canManageSubdomain) {
-      return c.json({ error: 'This signing key does not control the requested subdomain' }, 403);
+      return errorResponse(ErrorCodes.SUBDOMAIN_OWNERSHIP_REQUIRED, 'This signing key does not control the requested subdomain', 403);
     }
 
     if (!services.pages.get(id, subdomain) && existingSubdomain.page_count >= config.subdomains.maxPagesPerSubdomain) {
-      return c.json({ error: `Subdomain '${subdomain}' has reached the maximum of ${config.subdomains.maxPagesPerSubdomain} pages` }, 403);
+      return errorResponse(ErrorCodes.SUBDOMAIN_MAX_PAGES_EXCEEDED, `Subdomain '${subdomain}' has reached the maximum of ${config.subdomains.maxPagesPerSubdomain} pages`, 403);
     }
   }
 
@@ -165,18 +166,18 @@ pages.post('/:id', async (c) => {
     const rawBody = c.get('rawBody') || await c.req.text();
     body = JSON.parse(rawBody) as CreatePageBody;
   } catch {
-    return c.json({ error: 'Invalid JSON body' }, 400);
+    return errorResponse(ErrorCodes.INVALID_JSON, 'Invalid JSON body', 400);
   }
 
   const bodyError = validatePageBody(body);
   if (bodyError) {
-    return c.json({ error: bodyError.message }, 400);
+    return errorResponse(ErrorCodes.PAGE_INVALID_BODY, bodyError.message, 400);
   }
 
   if (body.auth) {
     const authError = validateAuthInput(body.auth);
     if (authError) {
-      return c.json({ error: authError.message }, 400);
+      return errorResponse(ErrorCodes.PAGE_INVALID_AUTH, authError.message, 400);
     }
   }
 
@@ -202,11 +203,11 @@ pages.post('/:id', async (c) => {
     const canOverride = currentKeyCanOverride(c, 'pages:update:any');
 
     if (!existingPage.ownerKeyId && !canOverride) {
-      return c.json({ error: 'This page predates signed ownership and requires admin migration before it can be updated' }, 403);
+      return errorResponse(ErrorCodes.PAGE_PREDATES_OWNERSHIP, 'This page predates signed ownership and requires admin migration before it can be updated', 403);
     }
 
     if (!sameOwner && !canOverride) {
-      return c.json({ error: 'This signing key does not own the page' }, 403);
+      return errorResponse(ErrorCodes.PAGE_OWNERSHIP_REQUIRED, 'This signing key does not own the page', 403);
     }
 
     if (existingPage.auth?.passwordHash) {
@@ -448,31 +449,31 @@ pages.delete('/:id', async (c) => {
 
   const idError = validateId(id);
   if (idError) {
-    return c.json({ error: idError.message }, 400);
+    return errorResponse(ErrorCodes.PAGE_INVALID_ID, idError.message, 400);
   }
 
   const page = subdomain ? services.pages.get(id, subdomain) : services.pages.get(id);
   if (!page) {
-    return c.json({ error: 'Page not found' }, 404);
+    return errorResponse(ErrorCodes.PAGE_NOT_FOUND, 'Page not found', 404);
   }
 
   const sameOwner = page.ownerKeyId === keyId;
   const canOverride = currentKeyCanOverride(c, 'pages:delete:any');
   if (!page.ownerKeyId && !canOverride) {
-    return c.json({ error: 'This page predates signed ownership and requires admin migration before it can be deleted' }, 403);
+    return errorResponse(ErrorCodes.PAGE_PREDATES_OWNERSHIP, 'This page predates signed ownership and requires admin migration before it can be deleted', 403);
   }
   if (!sameOwner && !canOverride) {
-    return c.json({ error: 'This signing key does not own the page' }, 403);
+    return errorResponse(ErrorCodes.PAGE_OWNERSHIP_REQUIRED, 'This signing key does not own the page', 403);
   }
 
   if (subdomain) {
     const parentSubdomain = services.subdomains.get(subdomain);
     if (!parentSubdomain) {
-      return c.json({ error: `Subdomain '${subdomain}' not found` }, 404);
+      return errorResponse(ErrorCodes.SUBDOMAIN_NOT_FOUND, `Subdomain '${subdomain}' not found`, 404);
     }
     const canManageSubdomain = parentSubdomain.ownerKeyId === keyId || currentKeyCanOverride(c, 'subdomains:write:any');
     if (!canManageSubdomain) {
-      return c.json({ error: 'This signing key does not control the requested subdomain' }, 403);
+      return errorResponse(ErrorCodes.SUBDOMAIN_OWNERSHIP_REQUIRED, 'This signing key does not control the requested subdomain', 403);
     }
   }
 
@@ -485,7 +486,7 @@ pages.delete('/:id', async (c) => {
 
   const deleted = await services.pages.delete(id, subdomain);
   if (!deleted) {
-    return c.json({ error: 'Failed to delete page' }, 500);
+    return errorResponse(ErrorCodes.PAGE_NOT_FOUND, 'Failed to delete page', 500);
   }
 
   trackPageDeleted({
@@ -511,7 +512,11 @@ pages.delete('/:id', async (c) => {
     statusCode: 204,
   });
 
-  return c.body(null, 204);
+  return c.json({
+    id,
+    deleted: true,
+    deleted_at: new Date().toISOString(),
+  });
 });
 
 export { pages };

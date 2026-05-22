@@ -11,6 +11,7 @@ import {
   deletePage as dbDeletePage,
   getPageCount as dbGetPageCount,
   listPagesBySubdomain as dbListPagesBySubdomain,
+  listPagesBySubdomainPaginated as dbListPagesBySubdomainPaginated,
   listPagesByOwner as dbListPagesByOwner,
   incrementAgentKeyUsage,
   decrementSubdomainPageCount as dbDecrementSubdomainPageCount,
@@ -77,6 +78,14 @@ export class PageService implements IPageService {
 
   listBySubdomain(subdomain: string): Page[] {
     return dbListPagesBySubdomain(subdomain);
+  }
+
+  /**
+   * List pages in a subdomain with cursor-based pagination.
+   * Returns metadata-only summaries (no HTML/Markdown/image/video content).
+   */
+  listBySubdomainPaginated(subdomain: string, cursor?: string, limit?: number): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+    return dbListPagesBySubdomainPaginated(subdomain, cursor, limit);
   }
 
   /**

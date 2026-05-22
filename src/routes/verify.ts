@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { verifyEd25519Signature, buildCanonicalRequest, decodeBase64Url } from '../utils/httpSignature.js';
 import { createHash } from 'crypto';
+import { ErrorCodes, errorResponse } from '../errors.js';
 import type { Services } from '../services/container.js';
 
 type StoredJwk = Record<string, string | boolean | undefined>;
@@ -28,34 +29,34 @@ verify.post('/', async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return c.json({ error: 'Invalid JSON body' }, 400);
+    return errorResponse(ErrorCodes.INVALID_JSON, 'Invalid JSON body', 400);
   }
 
   if (!body.keyId || typeof body.keyId !== 'string') {
-    return c.json({ error: 'keyId is required' }, 400);
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'keyId is required', 400);
   }
 
   if (!body.content || typeof body.content !== 'string') {
-    return c.json({ error: 'content is required' }, 400);
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'content is required', 400);
   }
 
   if (!body.signature || typeof body.signature !== 'string') {
-    return c.json({ error: 'signature is required' }, 400);
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'signature is required', 400);
   }
 
   const services = getServices(c);
   const agentKey = services.keys.get(body.keyId);
 
   if (!agentKey) {
-    return c.json({ error: 'Key not found' }, 404);
+    return errorResponse(ErrorCodes.KEY_NOT_FOUND, 'Key not found', 404);
   }
 
   if (agentKey.status === 'revoked') {
-    return c.json({ valid: false, error: 'Key has been revoked', keyId: body.keyId }, 410);
+    return errorResponse(ErrorCodes.KEY_REVOKED, 'Key has been revoked', 410, { keyId: body.keyId });
   }
 
   if (agentKey.status === 'blocked') {
-    return c.json({ valid: false, error: 'Key has been blocked', keyId: body.keyId }, 403);
+    return errorResponse(ErrorCodes.KEY_BLOCKED, 'Key has been blocked', 403, { keyId: body.keyId });
   }
 
   // Build the canonical request for verification

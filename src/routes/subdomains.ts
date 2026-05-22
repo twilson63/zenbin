@@ -1,6 +1,7 @@
 import { Context, Hono } from 'hono';
 import { config } from '../config.js';
 import { hasScope, requireSignedAgent } from '../middleware/signedAgent.js';
+import { ErrorCodes, errorResponse } from '../errors.js';
 import type { Services } from '../services/container.js';
 
 const subdomains = new Hono();
@@ -55,12 +56,12 @@ subdomains.post('/:name', async (c) => {
 
   const validation = validateSubdomainName(name);
   if (!validation.valid) {
-    return c.json({ error: validation.error }, 400);
+    return errorResponse(ErrorCodes.SUBDOMAIN_INVALID_NAME, validation.error, 400);
   }
 
   const existing = services.subdomains.get(name);
   if (existing) {
-    return c.json({ error: `Subdomain '${name}' is already taken` }, 409);
+    return errorResponse(ErrorCodes.SUBDOMAIN_TAKEN, `Subdomain '${name}' is already taken`, 409);
   }
 
   // ─── Plan limit check ────────────────────────────────────
@@ -104,7 +105,7 @@ subdomains.get('/:name', (c) => {
   const services = getServices(c);
   const subdomain = services.subdomains.get(name);
   if (!subdomain) {
-    return c.json({ error: `Subdomain '${name}' not found` }, 404);
+    return errorResponse(ErrorCodes.SUBDOMAIN_NOT_FOUND, `Subdomain '${name}' not found`, 404);
   }
 
   const baseUrl = config.baseUrl.replace(/^https?:\/\//, '');
@@ -124,23 +125,40 @@ subdomains.get('/:name/pages', (c) => {
   const services = getServices(c);
   const subdomain = services.subdomains.get(name);
   if (!subdomain) {
-    return c.json({ error: `Subdomain '${name}' not found` }, 404);
+    return errorResponse(ErrorCodes.SUBDOMAIN_NOT_FOUND, `Subdomain '${name}' not found`, 404);
   }
 
-  const pages = services.pages.listBySubdomain(name);
+  const cursor = c.req.query('cursor');
+  const limitParam = c.req.query('limit');
+  const limit = Math.min(Math.max(parseInt(limitParam || '50', 10) || 50, 1), 200);
+
+  const result = services.pages.listBySubdomainPaginated(name, cursor, limit);
+
   const baseUrl = config.baseUrl.replace(/^https?:\/\//, '');
   const protocol = config.baseUrl.startsWith('https') ? 'https' : 'http';
+
+  const pages = result.pages.map((p) => {
+    const subdomainPath = p.id === 'index' ? '/' : `/${p.id}`;
+    return {
+      id: p.id,
+      path: subdomainPath,
+      title: p.title || null,
+      url: `${protocol}://${name}.${baseUrl}${subdomainPath}`,
+      has_markdown: p.has_markdown,
+      has_image: p.has_image,
+      has_video: p.has_video,
+      created_at: p.created_at,
+      updated_at: p.updated_at,
+      etag: p.etag,
+    };
+  });
 
   return c.json({
     subdomain: name,
     url: `${protocol}://${name}.${baseUrl}`,
-    pages: pages.map((page) => ({
-      id: page.id,
-      path: page.id === 'index' ? '/' : `/${page.id}`,
-      title: page.title,
-      url: `${protocol}://${name}.${baseUrl}${page.id === 'index' ? '/' : `/${page.id}`}`,
-    })),
-    total: pages.length,
+    pages,
+    total: result.total,
+    next_cursor: result.next_cursor,
   });
 });
 
@@ -151,21 +169,21 @@ subdomains.delete('/:name', async (c) => {
   const subdomain = services.subdomains.get(name);
 
   if (!subdomain) {
-    return c.json({ error: `Subdomain '${name}' not found` }, 404);
+    return errorResponse(ErrorCodes.SUBDOMAIN_NOT_FOUND, `Subdomain '${name}' not found`, 404);
   }
 
   const sameOwner = subdomain.ownerKeyId === keyId;
   const allowed = sameOwner || canOverride(c, 'subdomains:delete:any');
   if (!subdomain.ownerKeyId && !allowed) {
-    return c.json({ error: 'This subdomain predates signed ownership and requires admin migration before it can be deleted' }, 403);
+    return errorResponse(ErrorCodes.SUBDOMAIN_PREDATES_OWNERSHIP, 'This subdomain predates signed ownership and requires admin migration before it can be deleted', 403);
   }
   if (!allowed) {
-    return c.json({ error: 'This signing key does not own the subdomain' }, 403);
+    return errorResponse(ErrorCodes.SUBDOMAIN_OWNERSHIP_REQUIRED, 'This signing key does not own the subdomain', 403);
   }
 
   const deleted = await services.subdomains.delete(name);
   if (!deleted) {
-    return c.json({ error: `Subdomain '${name}' not found` }, 404);
+    return errorResponse(ErrorCodes.SUBDOMAIN_NOT_FOUND, `Subdomain '${name}' not found`, 404);
   }
 
   await services.audit.save({
@@ -176,7 +194,11 @@ subdomains.delete('/:name', async (c) => {
     status: 'accepted',
   });
 
-  return c.body(null, 204);
+  return c.json({
+    name,
+    deleted: true,
+    deleted_at: new Date().toISOString(),
+  });
 });
 
 export { subdomains, validateSubdomainName };

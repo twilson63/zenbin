@@ -470,7 +470,9 @@ describe('Subdomains', () => {
         ...jsonSignedRequest({ signer, method: 'DELETE', path: `/v1/subdomains/${name}` }),
       });
       
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.deleted).toBe(true);
       
       // Verify subdomain is gone
       const checkRes = await app.request(`/v1/subdomains/${name}`);
