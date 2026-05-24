@@ -104,6 +104,40 @@ export function initDatabase(): {
   };
 }
 
+/**
+ * Backfill the owner index from existing pages.
+ * Called once after database initialization to ensure all pages
+ * (including those created before the owner index existed) are indexed.
+ */
+export function backfillOwnerIndex(): { indexed: number; skipped: number } {
+  const pagesDb = getDatabase();
+  let indexed = 0;
+  let skipped = 0;
+
+  for (const key of pagesDb.getKeys({})) {
+    const page = pagesDb.get(key);
+    if (!page) continue;
+
+    if (!page.ownerKeyId) {
+      skipped++;
+      continue;
+    }
+
+    // Check if already indexed
+    const idxDb = getOwnerIndexDatabase();
+    const idxKey = ownerIndexKey(page);
+    const existing = idxDb.get(idxKey);
+    if (existing) {
+      continue; // Already indexed
+    }
+
+    addPageToOwnerIndex(page);
+    indexed++;
+  }
+
+  return { indexed, skipped };
+}
+
 export function getDatabase(): Database<Page, string> {
   if (!db) {
     throw new Error('Database not initialized. Call initDatabase() first.');

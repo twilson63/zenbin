@@ -36,6 +36,13 @@ const app = new Hono<{ Variables: Variables }>();
 // Initialize services
 const services = createServices();
 
+// Backfill owner index for pages created before the listing feature
+import { backfillOwnerIndex } from './storage/db.js';
+const backfillResult = backfillOwnerIndex();
+if (backfillResult.indexed > 0 || backfillResult.skipped > 0) {
+  console.log(`Owner index backfill: ${backfillResult.indexed} indexed, ${backfillResult.skipped} skipped (no ownerKeyId)`);
+}
+
 // Middleware
 app.use('*', logger());
 app.use('*', cors());
