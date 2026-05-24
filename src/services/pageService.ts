@@ -11,12 +11,16 @@ import {
   deletePage as dbDeletePage,
   getPageCount as dbGetPageCount,
   listPagesBySubdomain as dbListPagesBySubdomain,
+  listPagesBySubdomainPaginated as dbListPagesBySubdomainPaginated,
+  listPagesByOwner as dbListPagesByOwner,
   incrementAgentKeyUsage,
-  decrementSubdomainPageCount,
+  decrementSubdomainPageCount as dbDecrementSubdomainPageCount,
+  incrementSubdomainPageCount as dbIncrementSubdomainPageCount,
   getAgentKey,
 } from '../storage/db.js';
+import type { PageSummary } from '../storage/db.js';
 import { deleteVideo, saveVideo } from '../storage/video.js';
-import { checkPageLimit, getPlanFromKey } from '../rules.js';
+import { checkPageLimit, getPlanFromKey, isBillingCycleExpired } from '../rules.js';
 import { config } from '../config.js';
 import { generateEtag } from '../utils/etag.js';
 import { hashPassword, generateUrlToken } from '../utils/auth.js';
@@ -39,6 +43,12 @@ export class PageService implements IPageService {
       subdomain?: string;
       auth?: { passwordHash?: string; urlTokenHash?: string };
       ownerKeyId?: string;
+      publishSignature?: string;
+      contentDigest?: string;
+      publishTimestamp?: string;
+      publishNonce?: string;
+      publishMethod?: string;
+      publishPath?: string;
       status?: 'active' | 'removed';
     },
     etag: string,
@@ -57,7 +67,7 @@ export class PageService implements IPageService {
     }
     const deleted = await dbDeletePage(id, subdomain);
     if (deleted && subdomain) {
-      decrementSubdomainPageCount(subdomain);
+      dbDecrementSubdomainPageCount(subdomain);
     }
     return deleted;
   }
@@ -68,6 +78,14 @@ export class PageService implements IPageService {
 
   listBySubdomain(subdomain: string): Page[] {
     return dbListPagesBySubdomain(subdomain);
+  }
+
+  /**
+   * List pages in a subdomain with cursor-based pagination.
+   * Returns metadata-only summaries (no HTML/Markdown/image/video content).
+   */
+  listBySubdomainPaginated(subdomain: string, cursor?: string, limit?: number): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+    return dbListPagesBySubdomainPaginated(subdomain, cursor, limit);
   }
 
   /**
@@ -121,5 +139,33 @@ export class PageService implements IPageService {
    */
   async saveVideoFile(id: string, buffer: Buffer, mimeType: string, subdomain?: string): Promise<string> {
     return saveVideo(id, buffer, mimeType, subdomain);
+  }
+
+  /**
+   * Delete a video file.
+   */
+  async deleteVideoFile(path: string): Promise<void> {
+    await deleteVideo(path);
+  }
+
+  /**
+   * Increment subdomain page count.
+   */
+  incrementSubdomainPageCount(subdomain: string): void {
+    dbIncrementSubdomainPageCount(subdomain);
+  }
+
+  /**
+   * Decrement subdomain page count.
+   */
+  decrementSubdomainPageCount(subdomain: string): void {
+    dbDecrementSubdomainPageCount(subdomain);
+  }
+
+  /**
+   * List pages by owner key ID with cursor-based pagination.
+   */
+  listByOwner(keyId: string, cursor?: string, limit?: number): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+    return dbListPagesByOwner(keyId, cursor, limit);
   }
 }

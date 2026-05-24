@@ -17,6 +17,7 @@ import type {
   Plan,
   LimitCheckResult,
 } from '../types.js';
+import type { PageSummary } from '../storage/db.js';
 
 // ─── Page Service ───────────────────────────────────────────
 
@@ -34,6 +35,12 @@ export interface IPageService {
     subdomain?: string;
     auth?: { passwordHash?: string; urlTokenHash?: string };
     ownerKeyId?: string;
+    publishSignature?: string;
+    contentDigest?: string;
+    publishTimestamp?: string;
+    publishNonce?: string;
+    publishMethod?: string;
+    publishPath?: string;
     status?: 'active' | 'removed';
   }, etag: string): Promise<SaveResult>;
 
@@ -41,10 +48,22 @@ export interface IPageService {
   delete(id: string, subdomain?: string): Promise<boolean>;
   count(): number;
   listBySubdomain(subdomain: string): Page[];
+  listBySubdomainPaginated(subdomain: string, cursor?: string, limit?: number): { pages: PageSummary[]; total: number; next_cursor: string | null };
 
   // Billing-aware helpers
   checkPublishLimit(keyId: string, id: string, subdomain?: string): LimitCheckResult;
   trackPageCreation(keyId: string): void;
+
+  // Video helpers
+  saveVideoFile(id: string, buffer: Buffer, mimeType: string, subdomain?: string): Promise<string>;
+  deleteVideoFile(path: string): Promise<void>;
+
+  // Subdomain page count helpers
+  incrementSubdomainPageCount(subdomain: string): void;
+  decrementSubdomainPageCount(subdomain: string): void;
+
+  // Owner-based listing
+  listByOwner(keyId: string, cursor?: string, limit?: number): { pages: PageSummary[]; total: number; next_cursor: string | null };
 }
 
 // ─── Subdomain Service ──────────────────────────────────────
@@ -60,6 +79,9 @@ export interface ISubdomainService {
   // Billing-aware helpers
   checkClaimLimit(keyId: string): LimitCheckResult;
   trackSubdomainClaim(keyId: string): void;
+
+  // Validation
+  validateName(name: string): { valid: boolean; error?: string };
 }
 
 // ─── Key Service ────────────────────────────────────────────
@@ -80,6 +102,11 @@ export interface IKeyService {
   updatePlan(keyId: string, plan: Plan, stripeCustomerId?: string, subscriptionId?: string): Promise<AgentKey | undefined>;
   incrementUsage(keyId: string, field: 'monthlyPageCount' | 'monthlySubdomainCount'): Promise<void>;
   resetUsage(keyId: string): Promise<void>;
+
+  // Billing-aware helpers
+  getPlan(keyId: string): Plan;
+  checkPageLimit(keyId: string, id: string, subdomain?: string): LimitCheckResult;
+  checkAndResetCycle(keyId: string): Promise<AgentKey | undefined>;
 }
 
 // ─── Nonce Service ──────────────────────────────────────────

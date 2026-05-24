@@ -5,11 +5,17 @@ import { render } from '../routes/render.js';
 import { initDatabase, closeDatabase } from '../storage/db.js';
 import { rmSync } from 'fs';
 import { createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
+import { createServices, type Services } from '../services/container.js';
 
 const TEST_DB_PATH = './data/test-markdown.lmdb';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index'];
 
-const app = new Hono();
+const services = createServices();
+const app = new Hono<{ Variables: { services: Services } }>();
+app.use('*', async (c, next) => {
+  c.set('services', services);
+  await next();
+});
 app.route('/v1/pages', pages);
 app.route('/p', render);
 

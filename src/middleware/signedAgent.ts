@@ -1,5 +1,6 @@
 import { Context, Next } from 'hono';
 import { config } from '../config.js';
+import { ErrorCodes } from '../errors.js';
 import { getAgentKey, registerUsedNonce, saveAuditLog, touchAgentKey, type AgentKey } from '../storage/db.js';
 import { buildCanonicalRequest, verifyBodyDigest, verifyEd25519Signature } from '../utils/httpSignature.js';
 
@@ -62,7 +63,7 @@ function hasAllHeaders(headers: OptionalSignedHeaders): headers is RequiredSigne
   );
 }
 
-async function reject(c: Context, status: number, error: string, keyId?: string, metadata?: Record<string, string>) {
+async function reject(c: Context, status: number, error: string, keyId?: string, metadata?: Record<string, string>, errorCode?: string) {
   await saveAuditLog({
     action: 'signed_write',
     targetType: 'auth',
@@ -71,7 +72,11 @@ async function reject(c: Context, status: number, error: string, keyId?: string,
     reason: error,
     metadata,
   });
-  return c.json({ error }, status as 401 | 403);
+  const body: Record<string, unknown> = {
+    error,
+    error_code: errorCode || 'UNKNOWN',
+  };
+  return c.json(body, status as 401 | 403);
 }
 
 export function hasScope(agentKey: AgentKey, scope: string): boolean {
@@ -84,36 +89,49 @@ export async function requireSignedAgent(c: Context, next: Next) {
     return;
   }
 
+  return verifySignedRequest(c, next);
+}
+
+/**
+ * Verify signed request for GET endpoints (listing, etc.)
+ * Same as requireSignedAgent but doesn't skip for non-write methods.
+ */
+export async function requireSignedAgentForGet(c: Context, next: Next) {
+  return verifySignedRequest(c, next);
+}
+
+async function verifySignedRequest(c: Context, next: Next) {
+
   const headers = getSignedHeaders(c);
   if (!hasAllHeaders(headers)) {
-    return reject(c, 401, 'Signed request headers are required');
+    return reject(c, 401, 'Signed request headers are required', undefined, undefined, ErrorCodes.SIGNING_HEADERS_REQUIRED);
   }
 
   const agentKey = getAgentKey(headers.keyId);
   if (!agentKey) {
-    return reject(c, 401, 'Unknown signing key', headers.keyId);
+    return reject(c, 401, 'Unknown signing key', headers.keyId, undefined, ErrorCodes.UNKNOWN_SIGNING_KEY);
   }
 
   if (agentKey.status === 'blocked') {
-    return reject(c, 403, 'Signing key is blocked', headers.keyId);
+    return reject(c, 403, 'Signing key is blocked', headers.keyId, undefined, ErrorCodes.KEY_BLOCKED);
   }
 
   if (agentKey.status === 'revoked') {
-    return reject(c, 403, 'Signing key is revoked', headers.keyId);
+    return reject(c, 403, 'Signing key is revoked', headers.keyId, undefined, ErrorCodes.KEY_REVOKED);
   }
 
   const requestTime = Date.parse(headers.timestamp);
   if (Number.isNaN(requestTime)) {
-    return reject(c, 401, 'Invalid signing timestamp', headers.keyId);
+    return reject(c, 401, 'Invalid signing timestamp', headers.keyId, undefined, ErrorCodes.INVALID_TIMESTAMP);
   }
 
   if (Math.abs(Date.now() - requestTime) > config.signedPublishing.maxTimestampSkewMs) {
-    return reject(c, 401, 'Signing timestamp is outside the allowed window', headers.keyId);
+    return reject(c, 401, 'Signing timestamp is outside the allowed window', headers.keyId, undefined, ErrorCodes.INVALID_TIMESTAMP);
   }
 
   const rawBody = await c.req.text();
   if (!verifyBodyDigest(rawBody, headers.contentDigest)) {
-    return reject(c, 401, 'Content digest mismatch', headers.keyId);
+    return reject(c, 401, 'Content digest mismatch', headers.keyId, undefined, ErrorCodes.CONTENT_DIGEST_MISMATCH);
   }
 
   const canonical = buildCanonicalRequest({
@@ -129,7 +147,7 @@ export async function requireSignedAgent(c: Context, next: Next) {
     canonical,
     signature: headers.signature,
   })) {
-    return reject(c, 401, 'Invalid request signature', headers.keyId);
+    return reject(c, 401, 'Invalid request signature', headers.keyId, undefined, ErrorCodes.INVALID_SIGNATURE);
   }
 
   const nonceAccepted = await registerUsedNonce(
@@ -139,7 +157,7 @@ export async function requireSignedAgent(c: Context, next: Next) {
   );
 
   if (!nonceAccepted) {
-    return reject(c, 401, 'Nonce has already been used', headers.keyId);
+    return reject(c, 401, 'Nonce has already been used', headers.keyId, undefined, ErrorCodes.NONCE_ALREADY_USED);
   }
 
   await touchAgentKey(headers.keyId);

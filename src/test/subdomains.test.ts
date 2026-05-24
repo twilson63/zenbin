@@ -9,12 +9,13 @@ import { initDatabase, closeDatabase } from '../storage/db.js';
 import { config } from '../config.js';
 import { rmSync } from 'fs';
 import { createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
+import { createServices, type Services } from '../services/container.js';
 
 const TEST_DB_PATH = './data/test-subdomains.lmdb';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index'];
 
 // Type for context variables
-type Variables = { subdomain: string };
+type Variables = { subdomain: string; services: Services };
 
 // Generate unique IDs for each test run
 let testId: number;
@@ -22,14 +23,25 @@ const uniqueId = (base: string) => `${base}-${testId++}`;
 let signer: TestSigner;
 let otherSigner: TestSigner;
 
+// Create services
+const services = createServices();
+
 // Create test apps
 const app = new Hono<{ Variables: Variables }>();
+app.use('*', async (c, next) => {
+  c.set('services', services);
+  await next();
+});
 app.route('/v1/pages', pages);
 app.route('/v1/subdomains', subdomains);
 app.route('/v1/stats', stats);
 app.route('/p', render);
 
 const prodLikeApp = new Hono<{ Variables: Variables }>();
+prodLikeApp.use('*', async (c, next) => {
+  c.set('services', services);
+  await next();
+});
 prodLikeApp.route('/v1/pages', pages);
 prodLikeApp.route('/v1/subdomains', subdomains);
 prodLikeApp.route('/v1/stats', stats);
@@ -458,7 +470,9 @@ describe('Subdomains', () => {
         ...jsonSignedRequest({ signer, method: 'DELETE', path: `/v1/subdomains/${name}` }),
       });
       
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.deleted).toBe(true);
       
       // Verify subdomain is gone
       const checkRes = await app.request(`/v1/subdomains/${name}`);

@@ -4,6 +4,7 @@ import { pages } from '../routes/pages.js';
 import { render } from '../routes/render.js';
 import { verify } from '../routes/verify.js';
 import { initDatabase, closeDatabase, getPage } from '../storage/db.js';
+import { createServices, type Services } from '../services/container.js';
 import { existsSync, rmSync } from 'fs';
 import { createTestSigner, generateTestSigner, jsonSignedRequest, jsonCapSignedRequest, type TestSigner } from './helpers/signing.js';
 import { adminKeys } from '../routes/adminKeys.js';
@@ -12,10 +13,16 @@ import { config } from '../config.js';
 import { buildCanonicalRequest, verifyEd25519Signature } from '../utils/httpSignature.js';
 
 const TEST_DB_PATH = './data/test-api.lmdb';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index'];
 
 // Create test app
-const app = new Hono();
+// Create test app with services
+const services = createServices();
+const app = new Hono<{ Variables: { subdomain: string; services: Services } }>();
+app.use('*', async (c, next) => {
+  c.set('services', services);
+  await next();
+});
 app.route('/v1/pages', pages);
 app.route('/p', render);
 app.route('/v1/keys', keys);
