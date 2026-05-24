@@ -9,7 +9,7 @@ type StoredJwk = Record<string, string | boolean | undefined>;
 const verify = new Hono();
 
 function getServices(c: any): Services {
-  return c.get('services');
+  return c.get('services')!;
 }
 
 interface VerifyRequestBody {

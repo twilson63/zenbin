@@ -80,7 +80,7 @@ billing.post('/portal', async (c) => {
     return errorResponse(ErrorCodes.SIGNING_HEADERS_REQUIRED, 'Signed request required', 401);
   }
 
-  const agentKey = c.get('services').keys.get(signedAgent.key.keyId);
+  const agentKey = c.get('services')!.keys.get(signedAgent.key.keyId);
   if (!agentKey?.stripeCustomerId) {
     return errorResponse(ErrorCodes.BILLING_KEY_NOT_FOUND, 'No billing account found. Subscribe first.', 404);
   }

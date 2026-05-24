@@ -341,8 +341,8 @@ Requires a signed request. Returns all pages owned by the authenticated key, wit
 
 | Parameter | Type | Default | Max | Description |
 |-----------|------|---------|-----|------------- |
-| `limit` | integer | 50 | 200 | Number of pages per request |
-| `cursor` | string | - | - | Opaque cursor from the previous response |
+| \`limit\` | integer | 50 | 200 | Number of pages per request |
+| \`cursor\` | string | - | - | Opaque cursor from the previous response |
 
 **Response:**
 
@@ -368,8 +368,8 @@ Requires a signed request. Returns all pages owned by the authenticated key, wit
 }
 \`\`\`
 
-- `subdomain` is `null` for standalone pages, the subdomain name for subdomain pages.
-- `next_cursor` is `null` when there are no more pages.
+- \`subdomain\` is \`null\` for standalone pages, the subdomain name for subdomain pages.
+- \`next_cursor\` is \`null\` when there are no more pages.
 - Response contains metadata only — no HTML, Markdown, image, or video content.
 
 ### Deleting a page
@@ -378,7 +378,7 @@ Requires a signed request. Returns all pages owned by the authenticated key, wit
 DELETE /v1/pages/{id}
 \`\`\`
 
-Must be signed by the owning key. Returns `200 OK` with a confirmation body:
+Must be signed by the owning key. Returns \`200 OK\` with a confirmation body:
 
 \`\`\`json
 {
@@ -431,8 +431,8 @@ Returns pages currently published in the subdomain. Supports cursor-based pagina
 
 | Parameter | Type | Default | Max | Description |
 |-----------|------|---------|-----|------------- |
-| `limit` | integer | 50 | 200 | Number of pages to return per request |
-| `cursor` | string | - | - | Opaque cursor from the previous response to fetch the next page |
+| \`limit\` | integer | 50 | 200 | Number of pages to return per request |
+| \`cursor\` | string | - | - | Opaque cursor from the previous response to fetch the next page |
 
 **Response:**
 
@@ -459,14 +459,14 @@ Returns pages currently published in the subdomain. Supports cursor-based pagina
 }
 \`\`\`
 
-- `next_cursor` is `null` when there are no more pages.
+- \`next_cursor\` is \`null\` when there are no more pages.
 - Each page summary includes metadata only — no HTML, Markdown, image, or video content.
 
 ### DELETE /v1/subdomains/{name}
 
 Deletes the subdomain and its pages. Must be signed by the owning key or an override-capable key.
 
-**Response:** `200 OK`
+**Response:** \`200 OK\`
 
 \`\`\`json
 {

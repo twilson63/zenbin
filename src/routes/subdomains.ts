@@ -12,7 +12,7 @@ const SUBDOMAIN_PATTERN = /^[a-z][a-z0-9-]*[a-z0-9]$/;
 subdomains.use('*', requireSignedAgent);
 
 function getServices(c: Context): Services {
-  return c.get('services');
+  return c.get('services')!;
 }
 
 function getSignedKey(c: Context): string | undefined {
@@ -56,7 +56,7 @@ subdomains.post('/:name', async (c) => {
 
   const validation = validateSubdomainName(name);
   if (!validation.valid) {
-    return errorResponse(ErrorCodes.SUBDOMAIN_INVALID_NAME, validation.error, 400);
+    return errorResponse(ErrorCodes.SUBDOMAIN_INVALID_NAME, validation.error ?? 'Invalid subdomain name', 400);
   }
 
   const existing = services.subdomains.get(name);

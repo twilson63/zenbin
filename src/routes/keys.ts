@@ -6,7 +6,7 @@ import type { Services } from '../services/container.js';
 const keys = new Hono();
 
 function getServices(c: any): Services {
-  return c.get('services');
+  return c.get('services')!;
 }
 
 keys.post('/register', async (c) => {

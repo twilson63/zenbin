@@ -9,7 +9,7 @@ const adminKeys = new Hono();
 adminKeys.use('*', requireAdmin);
 
 function getServices(c: any): Services {
-  return c.get('services');
+  return c.get('services')!;
 }
 
 // GET /v1/admin/keys — List all agent keys

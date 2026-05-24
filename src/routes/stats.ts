@@ -4,7 +4,7 @@ import type { Services } from '../services/container.js';
 const stats = new Hono();
 
 function getServices(c: any): Services {
-  return c.get('services');
+  return c.get('services')!;
 }
 
 // GET /v1/stats - Get site statistics
