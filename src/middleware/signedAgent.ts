@@ -35,6 +35,7 @@ declare module 'hono' {
   interface ContextVariableMap {
     signedAgent?: SignedAgentContext;
     rawBody?: string;
+    services?: import('../services/container.js').Services;
   }
 }
 

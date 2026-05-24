@@ -26,6 +26,7 @@ interface JwtPayload {
 declare module 'hono' {
   interface ContextVariableMap {
     user?: JwtPayload & { plan: string };
+    services?: import('../services/container.js').Services;
   }
 }
 

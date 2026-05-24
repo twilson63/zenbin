@@ -86,7 +86,7 @@ pages.get('/', requireSignedAgentForGet, (c) => {
 });
 
 function getServices(c: Context): Services {
-  return c.get('services');
+  return c.get('services')!;
 }
 
 function getSignedKey(c: Context): string {
@@ -143,7 +143,7 @@ pages.post('/:id', async (c) => {
   if (subdomain) {
     const subdomainValidation = validateSubdomainName(subdomain);
     if (!subdomainValidation.valid) {
-      return errorResponse(ErrorCodes.SUBDOMAIN_INVALID_NAME, subdomainValidation.error, 400);
+      return errorResponse(ErrorCodes.SUBDOMAIN_INVALID_NAME, subdomainValidation.error ?? 'Invalid subdomain name', 400);
     }
 
     const existingSubdomain = services.subdomains.get(subdomain);
