@@ -379,7 +379,6 @@ pages.post('/:id', async (c) => {
     response.recipientKeyId = page.recipientKeyId;
   }
 
-
   if (subdomain) {
     response.subdomain = subdomain;
     response.path = subdomainPath;

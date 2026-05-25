@@ -691,23 +691,25 @@ export function listPagesByOwner(
 
   for (const key of idxDb.getKeys({ start: prefix })) {
     if (!key.startsWith(prefix)) break;
-    total++;
 
     if (startAfterKey && key <= startAfterKey) {
       continue;
     }
 
+    const summary = idxDb.get(key);
+    if (!summary) continue;
+
+    // Apply since filter (inclusive)
+    if (since && summary.created_at < since) continue;
+
+    total++;
     if (pages.length < limit) {
-      const summary = idxDb.get(key);
-      if (summary) {
-        // Apply since filter (inclusive)
-        if (since && summary.created_at < since) continue;
-        pages.push(summary);
-      }
+      pages.push(summary);
     }
   }
 
-  const nextCursor = total > pages.length ? pages[pages.length - 1] ? `${prefix}${pages[pages.length - 1].subdomain ? pages[pages.length - 1].subdomain + ':' : ''}${pages[pages.length - 1].id}` : null : null;
+  const lastPage = pages.length > 0 ? pages[pages.length - 1] : null;
+  const nextCursor = total > pages.length && lastPage ? `${prefix}${lastPage.subdomain ? lastPage.subdomain + ':' : ''}${lastPage.id}` : null;
 
   return { pages, total, next_cursor: nextCursor };
 }
@@ -769,7 +771,6 @@ export function listPagesByRecipient(
 
   for (const key of idxDb.getKeys({ start: prefix })) {
     if (!key.startsWith(prefix)) break;
-    total++;
 
     if (startAfterKey && key <= startAfterKey) {
       continue;
@@ -781,6 +782,7 @@ export function listPagesByRecipient(
     // Apply since filter (inclusive)
     if (since && summary.created_at < since) continue;
 
+    total++;
     if (pages.length < limit) {
       pages.push(summary);
     }

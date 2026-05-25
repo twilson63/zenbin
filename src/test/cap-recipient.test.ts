@@ -698,6 +698,8 @@ describe('Phase 5: Integration Tests', () => {
     listData = await listRes.json() as any;
     const foundIds = listData.pages.map((p: any) => p.id);
     expect(foundIds).toContain(id2);
+    // total should reflect filtered count, not unfiltered
+    expect(listData.total).toBe(listData.pages.length);
   });
 
   it('undirected pages are invisible to recipient queries', async () => {
