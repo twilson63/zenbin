@@ -33,6 +33,7 @@ let agentKeyDb: Database<AgentKey, string>;
 let nonceDb: Database<NonceRecord, string>;
 let auditLogDb: Database<AuditLogRecord, string>;
 let ownerIndexDb: Database<PageSummary, string>;
+let recipientIndexDb: Database<PageSummary, string>;
 
 // PageSummary — lightweight metadata for listing, never includes content
 export interface PageSummary {
@@ -44,6 +45,7 @@ export interface PageSummary {
   has_image: boolean;
   has_video: boolean;
   ownerKeyId: string;
+  recipientKeyId?: string;
   created_at: string;
   updated_at: string;
   etag: string;
@@ -56,6 +58,7 @@ export function initDatabase(): {
   nonces: Database<NonceRecord, string>;
   auditLogs: Database<AuditLogRecord, string>;
   ownerIndex: Database<PageSummary, string>;
+  recipientIndex: Database<PageSummary, string>;
 } {
   if (!db) {
     db = open<Page, string>({
@@ -93,6 +96,12 @@ export function initDatabase(): {
       compression: true,
     });
   }
+  if (!recipientIndexDb) {
+    recipientIndexDb = open<PageSummary, string>({
+      path: `${config.lmdbPath}-recipient-index`,
+      compression: true,
+    });
+  }
 
   return {
     pages: db,
@@ -101,6 +110,7 @@ export function initDatabase(): {
     nonces: nonceDb,
     auditLogs: auditLogDb,
     ownerIndex: ownerIndexDb,
+    recipientIndex: recipientIndexDb,
   };
 }
 
@@ -132,6 +142,40 @@ export function backfillOwnerIndex(): { indexed: number; skipped: number } {
     }
 
     addPageToOwnerIndex(page);
+    indexed++;
+  }
+
+  return { indexed, skipped };
+}
+
+/**
+ * Backfill the recipient index from existing pages.
+ * Called once after database initialization to ensure all pages
+ * (including those created before the recipient index existed) are indexed.
+ */
+export function backfillRecipientIndex(): { indexed: number; skipped: number } {
+  const pagesDb = getDatabase();
+  let indexed = 0;
+  let skipped = 0;
+
+  for (const key of pagesDb.getKeys({})) {
+    const page = pagesDb.get(key);
+    if (!page) continue;
+
+    if (!page.recipientKeyId) {
+      skipped++;
+      continue;
+    }
+
+    // Check if already indexed
+    const idxDb = getRecipientIndexDatabase();
+    const idxKey = recipientIndexKey(page);
+    const existing = idxDb.get(idxKey);
+    if (existing) {
+      continue; // Already indexed
+    }
+
+    addPageToRecipientIndex(page);
     indexed++;
   }
 
@@ -180,6 +224,13 @@ export function getOwnerIndexDatabase(): Database<PageSummary, string> {
   return ownerIndexDb;
 }
 
+export function getRecipientIndexDatabase(): Database<PageSummary, string> {
+  if (!recipientIndexDb) {
+    throw new Error('Database not initialized. Call initDatabase() first.');
+  }
+  return recipientIndexDb;
+}
+
 function pageStorageKey(id: string, subdomain?: string): string {
   return subdomain ? `${subdomain}:${id}` : id;
 }
@@ -213,6 +264,7 @@ export async function savePage(
     publishNonce?: string;
     publishMethod?: string;
     publishPath?: string;
+    recipientKeyId?: string | null;
     status?: 'active' | 'removed';
   },
   etag: string,
@@ -246,6 +298,7 @@ export async function savePage(
     publishNonce: data.publishNonce || existing?.publishNonce,
     publishMethod: data.publishMethod || existing?.publishMethod,
     publishPath: data.publishPath || existing?.publishPath,
+    recipientKeyId: data.recipientKeyId === null ? undefined : (data.recipientKeyId !== undefined ? data.recipientKeyId : existing?.recipientKeyId),
     status: data.status || existing?.status || 'active',
   };
 
@@ -253,6 +306,12 @@ export async function savePage(
 
   // Update owner index
   addPageToOwnerIndex(page);
+
+  // Update recipient index: remove old entry if recipient changed, add new if present
+  if (existing?.recipientKeyId && existing.recipientKeyId !== page.recipientKeyId) {
+    removePageFromRecipientIndex(existing);
+  }
+  addPageToRecipientIndex(page);
 
   return {
     page,
@@ -275,6 +334,9 @@ export async function deletePage(id: string, subdomain?: string): Promise<boolea
 
   // Remove from owner index
   removePageFromOwnerIndex(existing);
+
+  // Remove from recipient index
+  removePageFromRecipientIndex(existing);
 
   return true;
 }
@@ -337,6 +399,7 @@ export function listPagesBySubdomainPaginated(
           has_image: !!page.image,
           has_video: !!page.video,
           ownerKeyId: page.ownerKeyId || '',
+          recipientKeyId: page.recipientKeyId,
           created_at: page.created_at,
           updated_at: page.updated_at,
           etag: page.etag,
@@ -591,6 +654,7 @@ export function addPageToOwnerIndex(page: Page): void {
     has_image: !!page.image,
     has_video: !!page.video,
     ownerKeyId: page.ownerKeyId,
+    recipientKeyId: page.recipientKeyId,
     created_at: page.created_at,
     updated_at: page.updated_at,
     etag: page.etag,
@@ -613,6 +677,7 @@ export function listPagesByOwner(
   ownerKeyId: string,
   cursor?: string,
   limit: number = 50,
+  since?: string,
 ): { pages: PageSummary[]; total: number; next_cursor: string | null } {
   const idxDb = getOwnerIndexDatabase();
   const prefix = `${ownerKeyId}/`;
@@ -626,21 +691,105 @@ export function listPagesByOwner(
 
   for (const key of idxDb.getKeys({ start: prefix })) {
     if (!key.startsWith(prefix)) break;
-    total++;
 
     if (startAfterKey && key <= startAfterKey) {
       continue;
     }
 
+    const summary = idxDb.get(key);
+    if (!summary) continue;
+
+    // Apply since filter (inclusive)
+    if (since && summary.created_at < since) continue;
+
+    total++;
     if (pages.length < limit) {
-      const summary = idxDb.get(key);
-      if (summary) {
-        pages.push(summary);
-      }
+      pages.push(summary);
     }
   }
 
-  const nextCursor = total > pages.length ? pages[pages.length - 1] ? `${prefix}${pages[pages.length - 1].subdomain ? pages[pages.length - 1].subdomain + ':' : ''}${pages[pages.length - 1].id}` : null : null;
+  const lastPage = pages.length > 0 ? pages[pages.length - 1] : null;
+  const nextCursor = total > pages.length && lastPage ? `${prefix}${lastPage.subdomain ? lastPage.subdomain + ':' : ''}${lastPage.id}` : null;
+
+  return { pages, total, next_cursor: nextCursor };
+}
+
+// ─── Recipient Index ───────────────────────────────────────
+
+function recipientIndexKey(page: Page): string {
+  const suffix = page.subdomain ? `${page.subdomain}:${page.id}` : page.id;
+  return `${page.recipientKeyId}/${suffix}`;
+}
+
+export function addPageToRecipientIndex(page: Page): void {
+  if (!page.recipientKeyId) return;
+  const idxDb = getRecipientIndexDatabase();
+  const key = recipientIndexKey(page);
+  const summary: PageSummary = {
+    id: page.id,
+    subdomain: page.subdomain ?? null,
+    title: page.title,
+    content_type: page.content_type,
+    has_markdown: !!page.markdown,
+    has_image: !!page.image,
+    has_video: !!page.video,
+    ownerKeyId: page.ownerKeyId || '',
+    recipientKeyId: page.recipientKeyId,
+    created_at: page.created_at,
+    updated_at: page.updated_at,
+    etag: page.etag,
+  };
+  idxDb.putSync(key, summary);
+}
+
+export function removePageFromRecipientIndex(page: Page): void {
+  if (!page.recipientKeyId) return;
+  const idxDb = getRecipientIndexDatabase();
+  const key = recipientIndexKey(page);
+  try {
+    idxDb.removeSync(key);
+  } catch {
+    // Key may not exist
+  }
+}
+
+export function listPagesByRecipient(
+  recipientKeyId: string,
+  cursor?: string,
+  limit: number = 50,
+  since?: string,
+): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+  const idxDb = getRecipientIndexDatabase();
+  const prefix = `${recipientKeyId}/`;
+  const pages: PageSummary[] = [];
+  let total = 0;
+  let startAfterKey: string | undefined;
+
+  if (cursor) {
+    startAfterKey = cursor;
+  }
+
+  for (const key of idxDb.getKeys({ start: prefix })) {
+    if (!key.startsWith(prefix)) break;
+
+    if (startAfterKey && key <= startAfterKey) {
+      continue;
+    }
+
+    const summary = idxDb.get(key);
+    if (!summary) continue;
+
+    // Apply since filter (inclusive)
+    if (since && summary.created_at < since) continue;
+
+    total++;
+    if (pages.length < limit) {
+      pages.push(summary);
+    }
+  }
+
+  const lastPage = pages.length > 0 ? pages[pages.length - 1] : null;
+  const nextCursor = total > pages.length && lastPage ? `${recipientKeyId}/${lastPage.subdomain ? lastPage.subdomain + ':' : ''}${lastPage.id}` : null;
 
   return { pages, total, next_cursor: nextCursor };
 }
@@ -719,5 +868,9 @@ export async function closeDatabase(): Promise<void> {
   if (ownerIndexDb) {
     await ownerIndexDb.close();
     ownerIndexDb = undefined as unknown as Database<PageSummary, string>;
+  }
+  if (recipientIndexDb) {
+    await recipientIndexDb.close();
+    recipientIndexDb = undefined as unknown as Database<PageSummary, string>;
   }
 }

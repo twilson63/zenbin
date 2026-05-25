@@ -13,7 +13,7 @@ import { config } from '../config.js';
 import { buildCanonicalRequest, verifyEd25519Signature } from '../utils/httpSignature.js';
 
 const TEST_DB_PATH = './data/test-api.lmdb';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index', '-recipient-index'];
 
 // Create test app
 // Create test app with services

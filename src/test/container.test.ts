@@ -5,7 +5,7 @@ import { rmSync } from 'fs';
 import type { Services } from '../services/container.js';
 
 const TEST_DB_PATH = './data/test-container.lmdb';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index', '-recipient-index'];
 
 let services: Services;
 

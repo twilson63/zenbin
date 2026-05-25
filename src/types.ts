@@ -64,6 +64,7 @@ export interface Page {
   publishNonce?: string;
   publishMethod?: string;
   publishPath?: string;
+  recipientKeyId?: string;
   status?: 'active' | 'removed';
 }
 

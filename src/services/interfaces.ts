@@ -41,6 +41,7 @@ export interface IPageService {
     publishNonce?: string;
     publishMethod?: string;
     publishPath?: string;
+    recipientKeyId?: string | null;
     status?: 'active' | 'removed';
   }, etag: string): Promise<SaveResult>;
 
@@ -63,7 +64,10 @@ export interface IPageService {
   decrementSubdomainPageCount(subdomain: string): void;
 
   // Owner-based listing
-  listByOwner(keyId: string, cursor?: string, limit?: number): { pages: PageSummary[]; total: number; next_cursor: string | null };
+  listByOwner(keyId: string, cursor?: string, limit?: number, since?: string): { pages: PageSummary[]; total: number; next_cursor: string | null };
+
+  // Recipient-based listing
+  listByRecipient(recipientKeyId: string, cursor?: string, limit?: number, since?: string): { pages: PageSummary[]; total: number; next_cursor: string | null };
 }
 
 // ─── Subdomain Service ──────────────────────────────────────

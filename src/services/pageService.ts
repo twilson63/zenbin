@@ -13,6 +13,7 @@ import {
   listPagesBySubdomain as dbListPagesBySubdomain,
   listPagesBySubdomainPaginated as dbListPagesBySubdomainPaginated,
   listPagesByOwner as dbListPagesByOwner,
+  listPagesByRecipient as dbListPagesByRecipient,
   incrementAgentKeyUsage,
   decrementSubdomainPageCount as dbDecrementSubdomainPageCount,
   incrementSubdomainPageCount as dbIncrementSubdomainPageCount,
@@ -49,6 +50,7 @@ export class PageService implements IPageService {
       publishNonce?: string;
       publishMethod?: string;
       publishPath?: string;
+      recipientKeyId?: string | null;
       status?: 'active' | 'removed';
     },
     etag: string,
@@ -165,7 +167,14 @@ export class PageService implements IPageService {
   /**
    * List pages by owner key ID with cursor-based pagination.
    */
-  listByOwner(keyId: string, cursor?: string, limit?: number): { pages: PageSummary[]; total: number; next_cursor: string | null } {
-    return dbListPagesByOwner(keyId, cursor, limit);
+  listByOwner(keyId: string, cursor?: string, limit?: number, since?: string): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+    return dbListPagesByOwner(keyId, cursor, limit, since);
+  }
+
+  /**
+   * List pages directed at a recipient key ID.
+   */
+  listByRecipient(recipientKeyId: string, cursor?: string, limit?: number, since?: string): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+    return dbListPagesByRecipient(recipientKeyId, cursor, limit, since);
   }
 }
