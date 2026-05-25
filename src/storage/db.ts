@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { open, Database } from 'lmdb';
 import { config } from '../config.js';
 import type {
@@ -146,6 +147,42 @@ export function backfillOwnerIndex(): { indexed: number; skipped: number } {
   }
 
   return { indexed, skipped };
+}
+
+/**
+ * Backfill publicKeyFingerprint for existing keys that don't have one.
+ * Called once after database initialization.
+ */
+export function backfillKeyFingerprints(): { updated: number; skipped: number } {
+  const keysDb = getAgentKeyDatabase();
+  let updated = 0;
+  let skipped = 0;
+
+  for (const keyId of keysDb.getKeys()) {
+    const key = keysDb.get(keyId);
+    if (!key) continue;
+
+    if (key.publicKeyFingerprint) {
+      skipped++;
+      continue;
+    }
+
+    // Compute fingerprint from public JWK
+    const x = key.publicJwk?.x;
+    if (!x || typeof x !== 'string') {
+      skipped++;
+      continue;
+    }
+
+    const pubKeyBuf = Buffer.from(x as string, 'base64url');
+    const fingerprint = crypto.createHash('sha256').update(pubKeyBuf).digest('base64url');
+
+    key.publicKeyFingerprint = fingerprint;
+    keysDb.putSync(keyId, key);
+    updated++;
+  }
+
+  return { updated, skipped };
 }
 
 /**
@@ -485,6 +522,7 @@ export function decrementSubdomainPageCount(name: string): void {
 export async function saveAgentKey(input: {
   keyId: string;
   publicJwk: AgentKey['publicJwk'];
+  publicKeyFingerprint?: string;
   scopes?: string[];
   status?: AgentKey['status'];
   plan?: Plan;
@@ -494,6 +532,7 @@ export async function saveAgentKey(input: {
   const record: AgentKey = {
     keyId: input.keyId,
     publicJwk: input.publicJwk,
+    publicKeyFingerprint: input.publicKeyFingerprint || existing?.publicKeyFingerprint || '',
     scopes: input.scopes || existing?.scopes || [],
     status: input.status || existing?.status || 'active',
     created_at: existing?.created_at || now,

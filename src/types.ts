@@ -83,6 +83,8 @@ export interface Subdomain {
 export interface AgentKey {
   keyId: string;
   publicJwk: StoredJwk;
+  /** SHA-256 of the Ed25519 public key, base64url-encoded (43 chars). Derived from publicJwk.x at registration. */
+  publicKeyFingerprint: string;
   status: 'active' | 'blocked' | 'revoked';
   scopes: string[];
   created_at: string;

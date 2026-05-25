@@ -87,13 +87,26 @@ describe('Phase 1: Data Model + Storage', () => {
     expect(page.recipientKeyId).toBeUndefined();
   });
 
+  it('should reject invalid recipientKeyId format on publish', async () => {
+    const id = uniqueId('invalid-recipient');
+    const res = await app.request(`/v1/pages/${id}`, jsonSignedRequest({
+      signer: alice,
+      method: 'POST',
+      path: `/v1/pages/${id}`,
+      body: { html: '<h1>Bad Recipient</h1>', recipientKeyId: 'agent-bob-456' },
+    }));
+    expect(res.status).toBe(400);
+    const data = await res.json() as any;
+    expect(data.error).toContain('fingerprint');
+  });
+
   it('should create and query recipient index entries', async () => {
     const id = uniqueId('recipient-idx');
     const res = await app.request(`/v1/pages/${id}`, jsonSignedRequest({
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Recipient Index Test</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Recipient Index Test</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
     expect(res.status).toBe(201);
 
@@ -110,7 +123,7 @@ describe('Phase 1: Data Model + Storage', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>To Delete</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>To Delete</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     // Verify Bob can see it
@@ -144,7 +157,7 @@ describe('Phase 1: Data Model + Storage', () => {
         signer: alice,
         method: 'POST',
         path: `/v1/pages/${id}`,
-        body: { html: `<h1>${id}</h1>`, recipientKeyId: bob.keyId },
+        body: { html: `<h1>${id}</h1>`, recipientKeyId: bob.publicKeyFingerprint },
       }));
       // Small delay to ensure different timestamps
       await new Promise(r => setTimeout(r, 10));
@@ -178,7 +191,7 @@ describe('Phase 1: Data Model + Storage', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Since Filter</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Since Filter</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     const listRes = await app.request(signedGet(bob, `/v1/pages?recipient=me&since=${encodeURIComponent(since)}`));
@@ -213,11 +226,11 @@ describe('Phase 2: Publish + Query', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Body Recipient</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Body Recipient</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
     expect(res.status).toBe(201);
     const data = await res.json() as any;
-    expect(data.recipientKeyId).toBe(bob.keyId);
+    expect(data.recipientKeyId).toBe(bob.publicKeyFingerprint);
   });
 
   it('should store recipient from CAP-Recipient-Key-Id header', async () => {
@@ -227,11 +240,11 @@ describe('Phase 2: Publish + Query', () => {
       method: 'POST',
       path: `/v1/pages/${id}`,
       body: { html: '<h1>CAP Header</h1>' },
-      headers: { 'CAP-Recipient-Key-Id': bob.keyId },
+      headers: { 'CAP-Recipient-Key-Id': bob.publicKeyFingerprint },
     }));
     expect(res.status).toBe(201);
     const data = await res.json() as any;
-    expect(data.recipientKeyId).toBe(bob.keyId);
+    expect(data.recipientKeyId).toBe(bob.publicKeyFingerprint);
   });
 
   it('should store recipient from X-Zenbin-Recipient-Key-Id header (legacy)', async () => {
@@ -241,11 +254,11 @@ describe('Phase 2: Publish + Query', () => {
       method: 'POST',
       path: `/v1/pages/${id}`,
       body: { html: '<h1>ZenBin Header</h1>' },
-      headers: { 'X-Zenbin-Recipient-Key-Id': bob.keyId },
+      headers: { 'X-Zenbin-Recipient-Key-Id': bob.publicKeyFingerprint },
     }));
     expect(res.status).toBe(201);
     const data = await res.json() as any;
-    expect(data.recipientKeyId).toBe(bob.keyId);
+    expect(data.recipientKeyId).toBe(bob.publicKeyFingerprint);
   });
 
   it('should give CAP header priority over body field', async () => {
@@ -254,12 +267,12 @@ describe('Phase 2: Publish + Query', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Priority</h1>', recipientKeyId: 'body-value' },
-      headers: { 'CAP-Recipient-Key-Id': 'header-value' },
+      body: { html: '<h1>Priority</h1>', recipientKeyId: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' },
+      headers: { 'CAP-Recipient-Key-Id': 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' },
     }));
     expect(res.status).toBe(201);
     const data = await res.json() as any;
-    expect(data.recipientKeyId).toBe('header-value');
+    expect(data.recipientKeyId).toBe('BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB');
   });
 
   it('should create undirected page without recipientKeyId', async () => {
@@ -290,11 +303,11 @@ describe('Phase 2: Publish + Query', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Add Recipient Updated</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Add Recipient Updated</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
     expect(res.status).toBe(200);
     const data = await res.json() as any;
-    expect(data.recipientKeyId).toBe(bob.keyId);
+    expect(data.recipientKeyId).toBe(bob.publicKeyFingerprint);
 
     // Verify Bob can see it
     const listRes = await app.request(signedGet(bob, '/v1/pages?recipient=me'));
@@ -309,7 +322,7 @@ describe('Phase 2: Publish + Query', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Change Recipient</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Change Recipient</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     // Change recipient to Carol
@@ -317,7 +330,7 @@ describe('Phase 2: Publish + Query', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Changed to Carol</h1>', recipientKeyId: carol.keyId },
+      body: { html: '<h1>Changed to Carol</h1>', recipientKeyId: carol.publicKeyFingerprint },
     }));
 
     // Bob should no longer see it
@@ -338,7 +351,7 @@ describe('Phase 2: Publish + Query', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Remove Recipient</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Remove Recipient</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     // Remove recipient (set to empty string → treated as undefined)
@@ -365,24 +378,24 @@ describe('Phase 2: Publish + Query', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id1}`,
-      body: { html: '<h1>To Bob 1</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>To Bob 1</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
     await app.request(`/v1/pages/${id2}`, jsonSignedRequest({
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id2}`,
-      body: { html: '<h1>To Bob 2</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>To Bob 2</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
     await app.request(`/v1/pages/${id3}`, jsonSignedRequest({
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id3}`,
-      body: { html: '<h1>To Carol</h1>', recipientKeyId: carol.keyId },
+      body: { html: '<h1>To Carol</h1>', recipientKeyId: carol.publicKeyFingerprint },
     }));
 
     const listRes = await app.request(signedGet(bob, '/v1/pages?recipient=me'));
     const data = await listRes.json() as any;
-    expect(data.pages.every((p: any) => p.recipientKeyId === bob.keyId)).toBe(true);
+    expect(data.pages.every((p: any) => p.recipientKeyId === bob.publicKeyFingerprint)).toBe(true);
     expect(data.pages.some((p: any) => p.id === id3)).toBe(false);
   });
 
@@ -401,7 +414,7 @@ describe('Phase 2: Publish + Query', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Cross Subdomain</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Cross Subdomain</h1>', recipientKeyId: bob.publicKeyFingerprint },
       headers: { 'X-Subdomain': subdomain },
     }));
 
@@ -427,7 +440,7 @@ describe('Phase 2: Publish + Query', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id2}`,
-      body: { html: '<h1>Alice to Bob</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Alice to Bob</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     // Owner query should return both
@@ -457,17 +470,19 @@ describe('Phase 2: Publish + Query', () => {
     expect(data.recipientKeyId).toBeUndefined();
   });
 
-  it('should accept non-existent keyId as recipient', async () => {
-    const id = uniqueId('nonexistent-recipient');
+  it('should accept valid fingerprint as recipient even for unregistered key', async () => {
+    const id = uniqueId('unregistered-recipient');
+    // A valid 43-char base64url fingerprint that doesn't belong to any registered key
+    const unregisteredFingerprint = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
     const res = await app.request(`/v1/pages/${id}`, jsonSignedRequest({
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Nonexistent Recipient</h1>', recipientKeyId: 'agent-nonexistent-456' },
+      body: { html: '<h1>Unregistered Recipient</h1>', recipientKeyId: unregisteredFingerprint },
     }));
     expect(res.status).toBe(201);
     const data = await res.json() as any;
-    expect(data.recipientKeyId).toBe('agent-nonexistent-456');
+    expect(data.recipientKeyId).toBe(unregisteredFingerprint);
   });
 
   it('should clean up recipient index on page delete', async () => {
@@ -476,7 +491,7 @@ describe('Phase 2: Publish + Query', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Delete Me</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Delete Me</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     // Bob sees it
@@ -506,11 +521,11 @@ describe('Phase 3: Provenance', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Provenance CAP</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Provenance CAP</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     const res = await app.request(`/p/${id}`);
-    expect(res.headers.get('CAP-Recipient-Key-Id')).toBe(bob.keyId);
+    expect(res.headers.get('CAP-Recipient-Key-Id')).toBe(bob.publicKeyFingerprint);
   });
 
   it('should include X-Zenbin-Recipient-Key-Id response header', async () => {
@@ -519,11 +534,11 @@ describe('Phase 3: Provenance', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Provenance ZenBin</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Provenance ZenBin</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     const res = await app.request(`/p/${id}`);
-    expect(res.headers.get('X-Zenbin-Recipient-Key-Id')).toBe(bob.keyId);
+    expect(res.headers.get('X-Zenbin-Recipient-Key-Id')).toBe(bob.publicKeyFingerprint);
   });
 
   it('should omit recipient headers when page has no recipient', async () => {
@@ -546,12 +561,12 @@ describe('Phase 3: Provenance', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<html><head></head><body><h1>Meta Tag Test</h1></body></html>', recipientKeyId: bob.keyId },
+      body: { html: '<html><head></head><body><h1>Meta Tag Test</h1></body></html>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     const res = await app.request(`/p/${id}`);
     const html = await res.text();
-    expect(html).toContain(`name="cap:recipient-key-id" content="${bob.keyId}"`);
+    expect(html).toContain(`name="cap:recipient-key-id" content="${bob.publicKeyFingerprint}"`);
   });
 
   it('should include recipientKeyId in JSON metadata', async () => {
@@ -560,14 +575,14 @@ describe('Phase 3: Provenance', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>JSON Meta</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>JSON Meta</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     const res = await app.request(`/p/${id}`, {
       headers: { Accept: 'application/json' },
     });
     const data = await res.json() as any;
-    expect(data.recipientKeyId).toBe(bob.keyId);
+    expect(data.recipientKeyId).toBe(bob.publicKeyFingerprint);
   });
 
   it('should include recipientKeyId in page list summary', async () => {
@@ -576,14 +591,14 @@ describe('Phase 3: Provenance', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>List Summary</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>List Summary</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     const listRes = await app.request(signedGet(bob, '/v1/pages?recipient=me'));
     const data = await listRes.json() as any;
     const found = data.pages.find((p: any) => p.id === id);
     expect(found).toBeDefined();
-    expect(found.recipientKeyId).toBe(bob.keyId);
+    expect(found.recipientKeyId).toBe(bob.publicKeyFingerprint);
   });
 
   it('should include recipientKeyId in owner page list', async () => {
@@ -592,14 +607,14 @@ describe('Phase 3: Provenance', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Owner List</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Owner List</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     const listRes = await app.request(signedGet(alice, '/v1/pages'));
     const data = await listRes.json() as any;
     const found = data.pages.find((p: any) => p.id === id);
     expect(found).toBeDefined();
-    expect(found.recipientKeyId).toBe(bob.keyId);
+    expect(found.recipientKeyId).toBe(bob.publicKeyFingerprint);
   });
 
   it('should include recipientKeyId in publish response', async () => {
@@ -608,11 +623,11 @@ describe('Phase 3: Provenance', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Publish Response</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Publish Response</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
     expect(res.status).toBe(201);
     const data = await res.json() as any;
-    expect(data.recipientKeyId).toBe(bob.keyId);
+    expect(data.recipientKeyId).toBe(bob.publicKeyFingerprint);
   });
 
   it('should include both CAP and X-Zenbin headers consistently', async () => {
@@ -621,12 +636,12 @@ describe('Phase 3: Provenance', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Dual Headers</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Dual Headers</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     const res = await app.request(`/p/${id}`);
-    expect(res.headers.get('CAP-Recipient-Key-Id')).toBe(bob.keyId);
-    expect(res.headers.get('X-Zenbin-Recipient-Key-Id')).toBe(bob.keyId);
+    expect(res.headers.get('CAP-Recipient-Key-Id')).toBe(bob.publicKeyFingerprint);
+    expect(res.headers.get('X-Zenbin-Recipient-Key-Id')).toBe(bob.publicKeyFingerprint);
   });
 });
 
@@ -640,7 +655,7 @@ describe('Phase 5: Integration Tests', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Task Results</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Task Results</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     // Bob queries ?recipient=me — sees the page
@@ -651,7 +666,7 @@ describe('Phase 5: Integration Tests', () => {
     // Bob reads the page — sees recipientKeyId in headers and metadata
     const pageRes = await app.request(`/p/${id}`, { headers: { Accept: 'application/json' } });
     const pageData = await pageRes.json() as any;
-    expect(pageData.recipientKeyId).toBe(bob.keyId);
+    expect(pageData.recipientKeyId).toBe(bob.publicKeyFingerprint);
 
     // Alice queries ?recipient=me — does NOT see the page (she owns it)
     listRes = await app.request(signedGet(alice, '/v1/pages?recipient=me'));
@@ -673,7 +688,7 @@ describe('Phase 5: Integration Tests', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id1}`,
-      body: { html: '<h1>First</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>First</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     await new Promise(r => setTimeout(r, 50));
@@ -685,7 +700,7 @@ describe('Phase 5: Integration Tests', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id2}`,
-      body: { html: '<h1>Second</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Second</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     // since=T1 → both pages
@@ -727,7 +742,7 @@ describe('Phase 5: Integration Tests', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Reassign</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Reassign</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     // Bob sees it
@@ -740,7 +755,7 @@ describe('Phase 5: Integration Tests', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Reassigned to Carol</h1>', recipientKeyId: carol.keyId },
+      body: { html: '<h1>Reassigned to Carol</h1>', recipientKeyId: carol.publicKeyFingerprint },
     }));
 
     // Bob no longer sees it
@@ -760,7 +775,7 @@ describe('Phase 5: Integration Tests', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Will Lose Recipient</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Will Lose Recipient</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     // Bob sees it
@@ -792,7 +807,7 @@ describe('Phase 5: Integration Tests', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Verify Me</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Verify Me</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     // Verify recipientKeyId is in the JSON metadata (recipientKeyId is NOT part of signature verification)
@@ -800,7 +815,7 @@ describe('Phase 5: Integration Tests', () => {
       headers: { Accept: 'application/json' },
     });
     const pageData = await pageRes.json() as any;
-    expect(pageData.recipientKeyId).toBe(bob.keyId);
+    expect(pageData.recipientKeyId).toBe(bob.publicKeyFingerprint);
     expect(pageData.capVersion).toBe('0.1');
   });
 
@@ -837,7 +852,7 @@ describe('Phase 5: Integration Tests', () => {
       signer: alice,
       method: 'POST',
       path: `/v1/pages/${id}`,
-      body: { html: '<h1>Delete Me</h1>', recipientKeyId: bob.keyId },
+      body: { html: '<h1>Delete Me</h1>', recipientKeyId: bob.publicKeyFingerprint },
     }));
 
     // Bob sees it

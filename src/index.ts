@@ -4,7 +4,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import dotenv from 'dotenv';
 import { config } from './config.js';
-import { initDatabase, closeDatabase, backfillOwnerIndex, backfillRecipientIndex } from './storage/db.js';
+import { initDatabase, closeDatabase, backfillOwnerIndex, backfillRecipientIndex, backfillKeyFingerprints } from './storage/db.js';
 import { initVideoStorage } from './storage/video.js';
 import { createServices, type Services } from './services/container.js';
 import { pages } from './routes/pages.js';
@@ -219,6 +219,12 @@ async function main() {
     const recipientBackfillResult = backfillRecipientIndex();
     if (recipientBackfillResult.indexed > 0 || recipientBackfillResult.skipped > 0) {
       console.log(`Recipient index backfill: ${recipientBackfillResult.indexed} indexed, ${recipientBackfillResult.skipped} skipped (no recipientKeyId)`);
+    }
+
+    // Backfill publicKeyFingerprint for keys that don't have one
+    const fpResult = backfillKeyFingerprints();
+    if (fpResult.updated > 0 || fpResult.skipped > 0) {
+      console.log(`Key fingerprint backfill: ${fpResult.updated} updated, ${fpResult.skipped} skipped (already have fingerprint)`);
     }
 
     console.log('Initializing video storage...');

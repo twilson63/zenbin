@@ -1,22 +1,26 @@
 import { createHash, generateKeyPairSync, sign } from 'crypto';
 import { saveAgentKey } from '../../storage/db.js';
+import { computeFingerprint } from '../../utils/fingerprint.js';
 
 export interface TestSigner {
   keyId: string;
   publicJwk: Record<string, string | boolean | undefined>;
   privateJwk: Record<string, string | boolean | undefined>;
+  /** SHA-256 fingerprint of the Ed25519 public key (43-char base64url) */
+  publicKeyFingerprint: string;
 }
 
 export function generateTestSigner(keyId: string): TestSigner {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
   const publicJwk = publicKey.export({ format: 'jwk' }) as Record<string, string | boolean | undefined>;
   const privateJwk = privateKey.export({ format: 'jwk' }) as Record<string, string | boolean | undefined>;
-  return { keyId, publicJwk, privateJwk };
+  const publicKeyFingerprint = computeFingerprint(publicJwk as { x: string });
+  return { keyId, publicJwk, privateJwk, publicKeyFingerprint };
 }
 
 export async function createTestSigner(keyId: string, scopes: string[] = []): Promise<TestSigner> {
   const signer = generateTestSigner(keyId);
-  await saveAgentKey({ keyId, publicJwk: signer.publicJwk, scopes });
+  await saveAgentKey({ keyId, publicJwk: signer.publicJwk, publicKeyFingerprint: signer.publicKeyFingerprint, scopes });
   return signer;
 }
 

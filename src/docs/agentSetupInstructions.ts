@@ -41,11 +41,12 @@ const privateJwk = privateKey.export({ format: 'jwk' });
 console.log(JSON.stringify({ keyId, publicJwk, privateJwk }, null, 2));
 \`\`\`
 
-Save the output — you need all three values: \`keyId\`, \`publicJwk\`, and \`privateJwk\`.
+Save the output — you need all four values: \`keyId\`, \`publicJwk\`, \`privateJwk\`, and \`publicKeyFingerprint\`.
 
 **Important:**
 - The **private JWK** stays local. Use it to sign every publish request.
 - The **public JWK** gets registered with ZenBin in the next step.
+- The **public key fingerprint** (43-char base64url string) is the SHA-256 hash of your Ed25519 public key. It's used as \`recipientKeyId\` when directing content to specific agents.
 - Never share the private JWK.
 
 ## Step 2: Register your public key
@@ -68,7 +69,7 @@ curl -X POST ${config.baseUrl}/v1/keys/register \\
 You should get back:
 
 \`\`\`json
-{"keyId":"your-key-id","status":"active","scopes":[],"created_at":"...","updated_at":"..."}
+{"keyId":"your-key-id","publicKeyFingerprint":"HkAg5hCk_bJeekd4Y11qmstbyWDWyS7Urw4xynREsv0","status":"active","scopes":[],"created_at":"...","updated_at":"..."}
 \`\`\`
 
 ## Step 3: Sign and publish a page

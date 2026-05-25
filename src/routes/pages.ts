@@ -5,6 +5,7 @@ import { hasScope, requireSignedAgent, requireSignedAgentForGet } from '../middl
 import { checkPageLimit, getPlanFromKey, isBillingCycleExpired } from '../rules.js';
 import { ErrorCodes, errorResponse } from '../errors.js';
 import { generateEtag } from '../utils/etag.js';
+import { isValidFingerprint } from '../utils/fingerprint.js';
 import { generateUrlToken, hashPassword, parseBasicAuth, verifyPassword } from '../utils/auth.js';
 import { decodeHtml, decodeMarkdown, validateAuthInput, validateId, validatePageBody } from '../utils/validation.js';
 import { trackApiCall, trackPageCreated, trackPageDeleted, trackPageUpdated } from '../analytics/posthog.js';
@@ -47,7 +48,9 @@ pages.use('*', requireSignedAgent);
 
 // GET /v1/pages — List pages owned by or directed to the authenticated key
 pages.get('/', requireSignedAgentForGet, (c) => {
-  const keyId = getSignedKey(c);
+  const signedAgent = c.get('signedAgent');
+  const keyId = signedAgent?.key?.keyId || getSignedKey(c);
+  const keyFingerprint = signedAgent?.key?.publicKeyFingerprint;
   const services = getServices(c);
   const cursor = c.req.query('cursor');
   const limitParam = c.req.query('limit');
@@ -57,7 +60,9 @@ pages.get('/', requireSignedAgentForGet, (c) => {
 
   let result;
   if (recipientParam === 'me') {
-    result = services.pages.listByRecipient(keyId, cursor, limit, since);
+    // recipient=me resolves to the authenticated key's fingerprint
+    const recipientFingerprint = keyFingerprint || keyId;
+    result = services.pages.listByRecipient(recipientFingerprint, cursor, limit, since);
   } else {
     result = services.pages.listByOwner(keyId, cursor, limit, since);
   }
@@ -301,6 +306,11 @@ pages.post('/:id', async (c) => {
   } else {
     // Neither provided: keep existing value
     recipientKeyId = undefined;
+  }
+
+  // Validate recipientKeyId is a 43-char base64url fingerprint (when present)
+  if (recipientKeyId && !isValidFingerprint(recipientKeyId)) {
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'recipientKeyId must be a 43-character base64url public key fingerprint (SHA-256 of the Ed25519 public key)', 400);
   }
 
   const { page, created } = await services.pages.save(
