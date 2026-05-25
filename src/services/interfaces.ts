@@ -41,7 +41,7 @@ export interface IPageService {
     publishNonce?: string;
     publishMethod?: string;
     publishPath?: string;
-    recipientKeyId?: string;
+    recipientKeyId?: string | null;
     status?: 'active' | 'removed';
   }, etag: string): Promise<SaveResult>;
 

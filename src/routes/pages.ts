@@ -288,8 +288,20 @@ pages.post('/:id', async (c) => {
   const publishPath = signedAgent?.path || c.req.path;
 
   // Extract recipientKeyId from header (priority) or body
-  const capRecipientHeader = c.req.header('CAP-Recipient-Key-Id') || c.req.header('X-Zenbin-Recipient-Key-Id');
-  const recipientKeyId = capRecipientHeader || body.recipientKeyId || undefined;
+  // Explicit empty string from header or body means "remove recipient" → pass null
+  // Not provided at all means "no change" → pass undefined
+  const capRecipientHeader = c.req.header('CAP-Recipient-Key-Id') ?? c.req.header('X-Zenbin-Recipient-Key-Id');
+  let recipientKeyId: string | null | undefined;
+  if (capRecipientHeader !== undefined) {
+    // Header present: use its value (empty string → null = remove)
+    recipientKeyId = capRecipientHeader || null;
+  } else if (body.recipientKeyId !== undefined) {
+    // Body field present: use its value (empty string → null = remove)
+    recipientKeyId = body.recipientKeyId || null;
+  } else {
+    // Neither provided: keep existing value
+    recipientKeyId = undefined;
+  }
 
   const { page, created } = await services.pages.save(
     id,

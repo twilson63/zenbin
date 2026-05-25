@@ -264,7 +264,7 @@ export async function savePage(
     publishNonce?: string;
     publishMethod?: string;
     publishPath?: string;
-    recipientKeyId?: string;
+    recipientKeyId?: string | null;
     status?: 'active' | 'removed';
   },
   etag: string,
@@ -298,7 +298,7 @@ export async function savePage(
     publishNonce: data.publishNonce || existing?.publishNonce,
     publishMethod: data.publishMethod || existing?.publishMethod,
     publishPath: data.publishPath || existing?.publishPath,
-    recipientKeyId: data.recipientKeyId !== undefined ? (data.recipientKeyId || undefined) : existing?.recipientKeyId,
+    recipientKeyId: data.recipientKeyId === null ? undefined : (data.recipientKeyId !== undefined ? data.recipientKeyId : existing?.recipientKeyId),
     status: data.status || existing?.status || 'active',
   };
 
