@@ -94,6 +94,7 @@ export interface IKeyService {
   save(input: {
     keyId: string;
     publicJwk: AgentKey['publicJwk'];
+    publicKeyFingerprint?: string;
     scopes?: string[];
     status?: AgentKey['status'];
     plan?: Plan;

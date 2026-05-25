@@ -80,10 +80,12 @@ describe('POST /v1/keys/register', () => {
     });
 
     expect(res.status).toBe(201);
-    const payload = await res.json() as { keyId: string; status: string; scopes: string[] };
+    const payload = await res.json() as { keyId: string; status: string; scopes: string[]; publicKeyFingerprint: string };
     expect(payload.keyId).toBe(keyId);
     expect(payload.status).toBe('active');
     expect(payload.scopes).toEqual([]);
+    expect(payload.publicKeyFingerprint).toHaveLength(43);
+    expect(payload.publicKeyFingerprint).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 
   it('should allow a self-registered key to publish content', async () => {
@@ -114,6 +116,27 @@ describe('POST /v1/keys/register', () => {
     });
 
     expect(publishRes.status).toBe(201);
+  });
+
+  it('should return publicKeyFingerprint on GET /:keyId/jwk', async () => {
+    const keyId = uniqueId('jwk-fp');
+    const signerMaterial = generateTestSigner(keyId);
+
+    const regRes = await app.request('/v1/keys/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        keyId,
+        publicJwk: signerMaterial.publicJwk,
+      }),
+    });
+    expect(regRes.status).toBe(201);
+
+    const jwkRes = await app.request(`/v1/keys/${encodeURIComponent(keyId)}/jwk`);
+    expect(jwkRes.status).toBe(200);
+    const data = await jwkRes.json() as any;
+    expect(data.publicKeyFingerprint).toHaveLength(43);
+    expect(data.publicKeyFingerprint).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 
   it('should reject invalid public JWKs', async () => {

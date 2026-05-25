@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { validateEd25519PublicJwk } from '../utils/httpSignature.js';
+import { computeFingerprint } from '../utils/fingerprint.js';
 import { ErrorCodes, errorResponse } from '../errors.js';
 import type { Services } from '../services/container.js';
 
@@ -55,6 +56,7 @@ keys.post('/register', async (c) => {
   const key = await services.keys.save({
     keyId: trimmedKeyId,
     publicJwk: body.publicJwk,
+    publicKeyFingerprint: computeFingerprint(body.publicJwk as { x: string }),
     scopes: [],
     status: 'active',
   });
@@ -71,6 +73,7 @@ keys.post('/register', async (c) => {
 
   return c.json({
     keyId: key.keyId,
+    publicKeyFingerprint: key.publicKeyFingerprint,
     status: key.status,
     scopes: key.scopes,
     created_at: key.created_at,
@@ -95,6 +98,7 @@ keys.get('/:keyId/jwk', (c) => {
   return c.json({
     keyId: agentKey.keyId,
     publicJwk: agentKey.publicJwk,
+    publicKeyFingerprint: agentKey.publicKeyFingerprint,
     status: agentKey.status,
     created_at: agentKey.created_at,
   });
