@@ -6,7 +6,7 @@ import { rmSync } from 'fs';
 import { createTestSigner, type TestSigner } from './helpers/signing.js';
 
 const TEST_DB_PATH = './data/test-page-service.lmdb';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index', '-recipient-index'];
 
 let freeSigner: TestSigner;
 let proSigner: TestSigner;

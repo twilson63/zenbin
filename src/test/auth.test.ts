@@ -17,7 +17,7 @@ app.use('*', async (c, next) => {
 app.route('/v1/pages', pages);
 app.route('/p', render);
 const TEST_DB_PATH = './data/test-auth.lmdb';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index', '-recipient-index'];
 
 // Helper to create Basic Auth header
 function basicAuth(password: string, username: string = ''): string {

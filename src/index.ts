@@ -4,7 +4,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import dotenv from 'dotenv';
 import { config } from './config.js';
-import { initDatabase, closeDatabase, backfillOwnerIndex } from './storage/db.js';
+import { initDatabase, closeDatabase, backfillOwnerIndex, backfillRecipientIndex } from './storage/db.js';
 import { initVideoStorage } from './storage/video.js';
 import { createServices, type Services } from './services/container.js';
 import { pages } from './routes/pages.js';
@@ -213,6 +213,12 @@ async function main() {
     const backfillResult = backfillOwnerIndex();
     if (backfillResult.indexed > 0 || backfillResult.skipped > 0) {
       console.log(`Owner index backfill: ${backfillResult.indexed} indexed, ${backfillResult.skipped} skipped (no ownerKeyId)`);
+    }
+
+    // Backfill recipient index for pages created before the recipient feature
+    const recipientBackfillResult = backfillRecipientIndex();
+    if (recipientBackfillResult.indexed > 0 || recipientBackfillResult.skipped > 0) {
+      console.log(`Recipient index backfill: ${recipientBackfillResult.indexed} indexed, ${recipientBackfillResult.skipped} skipped (no recipientKeyId)`);
     }
 
     console.log('Initializing video storage...');

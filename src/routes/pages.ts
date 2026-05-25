@@ -40,19 +40,27 @@ interface CreatePageBody {
     password?: string;
     urlToken?: boolean;
   };
+  recipientKeyId?: string;
 }
 
 pages.use('*', requireSignedAgent);
 
-// GET /v1/pages — List pages owned by the authenticated key
+// GET /v1/pages — List pages owned by or directed to the authenticated key
 pages.get('/', requireSignedAgentForGet, (c) => {
   const keyId = getSignedKey(c);
   const services = getServices(c);
   const cursor = c.req.query('cursor');
   const limitParam = c.req.query('limit');
   const limit = Math.min(Math.max(parseInt(limitParam || '50', 10) || 50, 1), 200);
+  const recipientParam = c.req.query('recipient');
+  const since = c.req.query('since') || undefined;
 
-  const result = services.pages.listByOwner(keyId, cursor, limit);
+  let result;
+  if (recipientParam === 'me') {
+    result = services.pages.listByRecipient(keyId, cursor, limit, since);
+  } else {
+    result = services.pages.listByOwner(keyId, cursor, limit, since);
+  }
 
   const baseUrl = config.baseUrl;
   const protocol = baseUrl.startsWith('https') ? 'https' : 'http';
@@ -63,7 +71,7 @@ pages.get('/', requireSignedAgentForGet, (c) => {
     const subdomainPath = p.id === 'index' ? '/' : `/${p.id}`;
     const pageUrl = p.subdomain ? `${subdomainOrigin}${subdomainPath}` : `${baseUrl}/p/${p.id}`;
 
-    return {
+    const item: Record<string, unknown> = {
       id: p.id,
       url: pageUrl,
       title: p.title || null,
@@ -76,6 +84,12 @@ pages.get('/', requireSignedAgentForGet, (c) => {
       updated_at: p.updated_at,
       etag: p.etag,
     };
+
+    if (p.recipientKeyId) {
+      item.recipientKeyId = p.recipientKeyId;
+    }
+
+    return item;
   });
 
   return c.json({
@@ -273,6 +287,10 @@ pages.post('/:id', async (c) => {
   const publishMethod = signedAgent?.method || c.req.method;
   const publishPath = signedAgent?.path || c.req.path;
 
+  // Extract recipientKeyId from header (priority) or body
+  const capRecipientHeader = c.req.header('CAP-Recipient-Key-Id') || c.req.header('X-Zenbin-Recipient-Key-Id');
+  const recipientKeyId = capRecipientHeader || body.recipientKeyId || undefined;
+
   const { page, created } = await services.pages.save(
     id,
     {
@@ -294,6 +312,7 @@ pages.post('/:id', async (c) => {
       publishNonce,
       publishMethod,
       publishPath,
+      recipientKeyId,
       status: 'active',
     },
     etag,
@@ -343,6 +362,10 @@ pages.post('/:id', async (c) => {
   response.verificationUrl = `${baseUrl}/v1/verify`;
   response.keyUrl = `${baseUrl}/v1/keys/${encodeURIComponent(keyId)}/jwk`;
   response.capVersion = '0.1';
+
+  if (page.recipientKeyId) {
+    response.recipientKeyId = page.recipientKeyId;
+  }
 
 
   if (subdomain) {

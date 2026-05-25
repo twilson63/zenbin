@@ -63,7 +63,7 @@ function serveBinary(c: Context, bodyBase64: string, contentType: string, filena
 }
 
 function injectProvenanceMeta(html: string, page: Page): string {
-  if (!page.ownerKeyId && !page.publishSignature) {
+  if (!page.ownerKeyId && !page.publishSignature && !page.recipientKeyId) {
     return html;
   }
 
@@ -81,6 +81,9 @@ function injectProvenanceMeta(html: string, page: Page): string {
   if (page.ownerKeyId || page.publishSignature) {
     metaTags.push(`  <meta name="cap:version" content="0.1">`);
     metaTags.push(`  <meta name="cap:verification-url" content="/v1/verify">`);
+  }
+  if (page.recipientKeyId) {
+    metaTags.push(`  <meta name="cap:recipient-key-id" content="${page.recipientKeyId}">`);
   }
 
   const provenanceBlock = metaTags.join('\n');
@@ -122,6 +125,10 @@ function injectProvenanceHttpHeaders(c: Context, page: Page): void {
   }
   if (page.publishPath) {
     c.header('X-Zenbin-Signed-Path', page.publishPath);
+  }
+  if (page.recipientKeyId) {
+    c.header('CAP-Recipient-Key-Id', page.recipientKeyId);
+    c.header('X-Zenbin-Recipient-Key-Id', page.recipientKeyId);
   }
 }
 
@@ -260,6 +267,10 @@ render.get('/:id', async (c) => {
     if (page.ownerKeyId || page.publishSignature) {
       response.verificationUrl = '/v1/verify';
       response.capVersion = '0.1';
+    }
+
+    if (page.recipientKeyId) {
+      response.recipientKeyId = page.recipientKeyId;
     }
 
     c.header('ETag', jsonEtag);

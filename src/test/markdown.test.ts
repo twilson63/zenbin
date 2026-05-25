@@ -8,7 +8,7 @@ import { createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/
 import { createServices, type Services } from '../services/container.js';
 
 const TEST_DB_PATH = './data/test-markdown.lmdb';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index', '-recipient-index'];
 
 const services = createServices();
 const app = new Hono<{ Variables: { services: Services } }>();
