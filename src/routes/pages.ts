@@ -90,6 +90,12 @@ pages.get('/', requireSignedAgentForGet, (c) => {
       etag: p.etag,
     };
 
+    // Include ownerKeyId so consumers can verify sender signatures
+    if (p.ownerKeyId) {
+      item.keyId = p.ownerKeyId;
+      item.keyUrl = `${baseUrl}/v1/keys/${encodeURIComponent(p.ownerKeyId)}/jwk`;
+    }
+
     if (p.recipientKeyId) {
       item.recipientKeyId = p.recipientKeyId;
     }
