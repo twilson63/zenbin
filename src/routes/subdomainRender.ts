@@ -565,9 +565,10 @@ subdomainRender.get('/*/raw', extractSubdomain, async (c) => {
   const authResponse = await verifyPageAuth(c, page);
   if (authResponse) {
     return authResponse;
+  }
+  
   // Inject CAP Protocol provenance headers for ALL response types
   injectProvenanceHttpHeaders(c, page);
-  }
   
   // Check If-None-Match for caching
   const ifNoneMatch = c.req.header('If-None-Match');
@@ -607,11 +608,12 @@ subdomainRender.get('/*/md', extractSubdomain, async (c) => {
   
   // Check authentication
   const authResponse = await verifyPageAuth(c, page);
-  // Inject CAP Protocol provenance headers for ALL response types
-  injectProvenanceHttpHeaders(c, page);
   if (authResponse) {
     return authResponse;
   }
+  
+  // Inject CAP Protocol provenance headers for ALL response types
+  injectProvenanceHttpHeaders(c, page);
   
   if (!page.markdown) {
     return c.json({ error: 'Page has no markdown content' }, 404);
@@ -648,13 +650,14 @@ subdomainRender.get('/*/image', extractSubdomain, async (c) => {
   if (!page) {
     return c.json({ error: 'Page not found' }, 404);
   }
-  // Inject CAP Protocol provenance headers for ALL response types
-  injectProvenanceHttpHeaders(c, page);
 
   const authResponse = await verifyPageAuth(c, page);
   if (authResponse) {
     return authResponse;
   }
+
+  // Inject CAP Protocol provenance headers for ALL response types
+  injectProvenanceHttpHeaders(c, page);
 
   if (!page.image) {
     return c.json({ error: 'Page has no image content' }, 404);
@@ -679,8 +682,6 @@ subdomainRender.get('/*/video', extractSubdomain, async (c) => {
 
   const page = getPage(pageId, subdomain);
   if (!page) {
-  // Inject CAP Protocol provenance headers for ALL response types
-  injectProvenanceHttpHeaders(c, page);
     return c.json({ error: 'Page not found' }, 404);
   }
 
@@ -688,6 +689,9 @@ subdomainRender.get('/*/video', extractSubdomain, async (c) => {
   if (authResponse) {
     return authResponse;
   }
+
+  // Inject CAP Protocol provenance headers for ALL response types
+  injectProvenanceHttpHeaders(c, page);
 
   if (!page.video) {
     return c.json({ error: 'Page has no video content' }, 404);
@@ -739,8 +743,6 @@ export async function serveSubdomainPage(c: any, subdomain: string, path: string
     }
     
     // Otherwise, show 404
-  // Inject CAP Protocol provenance headers for ALL response types
-  injectProvenanceHttpHeaders(c, page);
     c.header('Content-Type', 'text/html; charset=utf-8');
     return c.body(getNotFoundPage(subdomain, path), 404);
   }
@@ -750,6 +752,9 @@ export async function serveSubdomainPage(c: any, subdomain: string, path: string
   if (authResponse) {
     return authResponse;
   }
+
+  // Inject CAP Protocol provenance headers for ALL response types
+  injectProvenanceHttpHeaders(c, page);
 
   if (explicitView === 'raw') {
     const ifNoneMatch = c.req.header('If-None-Match');
