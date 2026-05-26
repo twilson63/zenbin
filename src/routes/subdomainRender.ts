@@ -433,6 +433,8 @@ subdomainRender.get('/*', async (c) => {
     return authResponse;
   }
   
+  // Inject CAP Protocol provenance headers for ALL response types
+  injectProvenanceHttpHeaders(c, page);
   if (explicitView === 'raw') {
     const ifNoneMatch = c.req.header('If-None-Match');
     if (etagMatches(ifNoneMatch, page.etag)) {
@@ -528,8 +530,7 @@ subdomainRender.get('/*', async (c) => {
   c.header('Cache-Control', 'public, max-age=0, must-revalidate');
   c.header('Content-Type', getDocumentContentType(page));
   
-  // CAP Protocol provenance headers and meta tags
-  injectProvenanceHttpHeaders(c, page);
+  // CAP Protocol provenance meta tags (HTTP headers already injected after auth check)
   let html = page.html;
   html = injectProvenanceMeta(html, page);
   html = shouldInjectPostHog(html) ? injectPostHog(html) : html;
@@ -564,6 +565,8 @@ subdomainRender.get('/*/raw', extractSubdomain, async (c) => {
   const authResponse = await verifyPageAuth(c, page);
   if (authResponse) {
     return authResponse;
+  // Inject CAP Protocol provenance headers for ALL response types
+  injectProvenanceHttpHeaders(c, page);
   }
   
   // Check If-None-Match for caching
@@ -604,6 +607,8 @@ subdomainRender.get('/*/md', extractSubdomain, async (c) => {
   
   // Check authentication
   const authResponse = await verifyPageAuth(c, page);
+  // Inject CAP Protocol provenance headers for ALL response types
+  injectProvenanceHttpHeaders(c, page);
   if (authResponse) {
     return authResponse;
   }
@@ -643,6 +648,8 @@ subdomainRender.get('/*/image', extractSubdomain, async (c) => {
   if (!page) {
     return c.json({ error: 'Page not found' }, 404);
   }
+  // Inject CAP Protocol provenance headers for ALL response types
+  injectProvenanceHttpHeaders(c, page);
 
   const authResponse = await verifyPageAuth(c, page);
   if (authResponse) {
@@ -672,6 +679,8 @@ subdomainRender.get('/*/video', extractSubdomain, async (c) => {
 
   const page = getPage(pageId, subdomain);
   if (!page) {
+  // Inject CAP Protocol provenance headers for ALL response types
+  injectProvenanceHttpHeaders(c, page);
     return c.json({ error: 'Page not found' }, 404);
   }
 
@@ -730,6 +739,8 @@ export async function serveSubdomainPage(c: any, subdomain: string, path: string
     }
     
     // Otherwise, show 404
+  // Inject CAP Protocol provenance headers for ALL response types
+  injectProvenanceHttpHeaders(c, page);
     c.header('Content-Type', 'text/html; charset=utf-8');
     return c.body(getNotFoundPage(subdomain, path), 404);
   }
@@ -803,8 +814,7 @@ export async function serveSubdomainPage(c: any, subdomain: string, path: string
   c.header('ETag', page.etag);
   c.header('Cache-Control', 'public, max-age=0, must-revalidate');
   
-  // CAP Protocol provenance headers and meta tags
-  injectProvenanceHttpHeaders(c, page);
+  // CAP Protocol provenance meta tags (HTTP headers already injected after auth check)
   let html = page.html;
   html = injectProvenanceMeta(html, page);
   html = shouldInjectPostHog(html) ? injectPostHog(html) : html;

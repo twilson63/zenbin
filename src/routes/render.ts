@@ -154,6 +154,9 @@ render.get('/:id', async (c) => {
     return authResponse;
   }
 
+  // Inject CAP Protocol provenance headers for ALL response types (markdown, image, video, HTML)
+  injectProvenanceHttpHeaders(c, page);
+
   const acceptHeader = c.req.header('Accept') || '';
   const wantsJson = acceptHeader.includes('application/json');
   const wantsMarkdown = acceptHeader.includes('text/markdown');
@@ -266,8 +269,7 @@ render.get('/:id', async (c) => {
 
   trackRequestView(c, id);
 
-  injectProvenanceHttpHeaders(c, page);
-
+  // CAP Protocol provenance meta tags (HTTP headers already injected after auth check)
   let html = page.html;
   html = injectProvenanceMeta(html, page);
   html = shouldInjectPostHog(html) ? injectPostHog(html) : html;
