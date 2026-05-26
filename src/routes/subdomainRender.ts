@@ -7,6 +7,8 @@ import { generateEtag, etagMatches } from '../utils/etag.js';
 import { verifyPassword, verifyUrlToken, parseBasicAuth } from '../utils/auth.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
 import { getVideoMimeType, getVideoPath, videoExists } from '../storage/video.js';
+import { injectProvenanceMeta, injectProvenanceHttpHeaders } from '../utils/provenance.js';
+import { injectPostHog, shouldInjectPostHog } from '../utils/posthog-inject.js';
 import type { Page } from '../storage/db.js';
 
 // Type for context variables
@@ -526,7 +528,13 @@ subdomainRender.get('/*', async (c) => {
   c.header('Cache-Control', 'public, max-age=0, must-revalidate');
   c.header('Content-Type', getDocumentContentType(page));
   
-  return c.body(page.html);
+  // CAP Protocol provenance headers and meta tags
+  injectProvenanceHttpHeaders(c, page);
+  let html = page.html;
+  html = injectProvenanceMeta(html, page);
+  html = shouldInjectPostHog(html) ? injectPostHog(html) : html;
+  
+  return c.body(html);
 });
 
 // GET /*/raw - Fetch raw HTML from subdomain
@@ -795,5 +803,11 @@ export async function serveSubdomainPage(c: any, subdomain: string, path: string
   c.header('ETag', page.etag);
   c.header('Cache-Control', 'public, max-age=0, must-revalidate');
   
-  return c.body(page.html);
+  // CAP Protocol provenance headers and meta tags
+  injectProvenanceHttpHeaders(c, page);
+  let html = page.html;
+  html = injectProvenanceMeta(html, page);
+  html = shouldInjectPostHog(html) ? injectPostHog(html) : html;
+  
+  return c.body(html);
 }
