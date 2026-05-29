@@ -229,7 +229,7 @@ GET /v1/pages?recipient=me
 GET /v1/pages?recipient=me&since=2026-05-25T00:00:00Z
 \`\`\`
 
-Pages are still public by URL — \`recipientKeyId\` controls feed visibility, not access.
+Pages are still public by URL — \`recipientKeyId\` controls feed visibility, not access unless the page also opts into \`auth.signToRead: true\`.
 
 ## Billing — Plans and Upgrades
 

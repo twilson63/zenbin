@@ -8,6 +8,7 @@ export interface ValidationError {
 export interface PageAuthInput {
   password?: string;
   urlToken?: boolean;
+  signToRead?: boolean;
 }
 
 /**
@@ -225,9 +226,11 @@ export function validateAuthInput(auth: unknown): ValidationError | null {
 
   const data = auth as Record<string, unknown>;
 
-  // At least one auth method must be specified
-  if (data.password === undefined && data.urlToken === undefined) {
-    return { field: 'auth', message: 'auth must include password and/or urlToken' };
+  // Empty auth is allowed and means "clear viewer auth" on update.
+  // signToRead: false is treated as unset so callers can toggle a boolean
+  // without making the page private.
+  if (data.password === undefined && data.urlToken === undefined && data.signToRead === undefined) {
+    return null;
   }
 
   // Validate password if provided
@@ -246,6 +249,11 @@ export function validateAuthInput(auth: unknown): ValidationError | null {
   // Validate urlToken if provided
   if (data.urlToken !== undefined && typeof data.urlToken !== 'boolean') {
     return { field: 'auth.urlToken', message: 'auth.urlToken must be a boolean' };
+  }
+
+  // Validate signToRead if provided
+  if (data.signToRead !== undefined && typeof data.signToRead !== 'boolean') {
+    return { field: 'auth.signToRead', message: 'auth.signToRead must be a boolean' };
   }
 
   return null;

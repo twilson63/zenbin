@@ -38,6 +38,7 @@ export interface BillingInfo {
 export interface PageAuth {
   passwordHash?: string;
   urlTokenHash?: string;
+  signToRead?: boolean;
 }
 
 export interface Page {

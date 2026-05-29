@@ -293,7 +293,7 @@ export async function savePage(
     content_type?: string;
     title?: string;
     subdomain?: string;
-    auth?: { passwordHash?: string; urlTokenHash?: string };
+    auth?: { passwordHash?: string; urlTokenHash?: string; signToRead?: boolean };
     ownerKeyId?: string;
     publishSignature?: string;
     contentDigest?: string;

@@ -4,7 +4,7 @@ import { ErrorCodes } from '../errors.js';
 import { getAgentKey, registerUsedNonce, saveAuditLog, touchAgentKey, type AgentKey } from '../storage/db.js';
 import { buildCanonicalRequest, verifyBodyDigest, verifyEd25519Signature } from '../utils/httpSignature.js';
 
-interface SignedAgentContext {
+export interface SignedAgentContext {
   key: AgentKey;
   rawBody: string;
   contentDigest: string;
@@ -102,7 +102,15 @@ export async function requireSignedAgentForGet(c: Context, next: Next) {
 }
 
 async function verifySignedRequest(c: Context, next: Next) {
+  const result = await verifySignedAgent(c);
+  if (result instanceof Response) {
+    return result;
+  }
 
+  await next();
+}
+
+export async function verifySignedAgent(c: Context): Promise<SignedAgentContext | Response> {
   const headers = getSignedHeaders(c);
   if (!hasAllHeaders(headers)) {
     return reject(c, 401, 'Signed request headers are required', undefined, undefined, ErrorCodes.SIGNING_HEADERS_REQUIRED);
@@ -173,5 +181,6 @@ async function verifySignedRequest(c: Context, next: Next) {
     method: c.req.method,
     path: c.req.path,
   });
-  await next();
+
+  return c.get('signedAgent')!;
 }

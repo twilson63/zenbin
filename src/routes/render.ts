@@ -5,6 +5,7 @@ import { validateId } from '../utils/validation.js';
 import { generateEtag, etagMatches } from '../utils/etag.js';
 import { verifyPassword, verifyUrlToken, parseBasicAuth } from '../utils/auth.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
+import { verifySignToRead } from '../middleware/signToRead.js';
 import { trackPageView } from '../analytics/posthog.js';
 import { injectPostHog, shouldInjectPostHog } from '../utils/posthog-inject.js';
 import { getVideoMimeType, getVideoPath, videoExists } from '../storage/video.js';
@@ -105,6 +106,14 @@ async function verifyPageAuth(c: Context, page: Page): Promise<Response | null> 
       return null;
     }
     recordFailedAttempt(pageId);
+  }
+
+  const signToReadResult = await verifySignToRead(c, page, pageId);
+  if (signToReadResult.kind === 'authorized') {
+    return null;
+  }
+  if (signToReadResult.kind === 'response') {
+    return signToReadResult.response;
   }
 
   const authHeader = c.req.header('Authorization');
