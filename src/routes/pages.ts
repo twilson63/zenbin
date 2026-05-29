@@ -40,7 +40,8 @@ interface CreatePageBody {
   auth?: {
     password?: string;
     urlToken?: boolean;
-  };
+    signToRead?: boolean;
+  } | null;
   recipientKeyId?: string;
 }
 
@@ -199,7 +200,7 @@ pages.post('/:id', async (c) => {
     return errorResponse(ErrorCodes.PAGE_INVALID_BODY, bodyError.message, 400);
   }
 
-  if (body.auth) {
+  if (body.auth !== undefined && body.auth !== null) {
     const authError = validateAuthInput(body.auth);
     if (authError) {
       return errorResponse(ErrorCodes.PAGE_INVALID_AUTH, authError.message, 400);
@@ -271,20 +272,28 @@ pages.post('/:id', async (c) => {
   ].join('');
   const etag = generateEtag(etagContent);
 
-  let authData: { passwordHash?: string; urlTokenHash?: string } | undefined;
+  let authData: { passwordHash?: string; urlTokenHash?: string; signToRead?: boolean } | undefined;
   let urlToken: string | undefined;
 
-  if (body.auth) {
+  if (body.auth !== undefined) {
     authData = {};
 
-    if (body.auth.password) {
+    if (body.auth?.password) {
       authData.passwordHash = await hashPassword(body.auth.password);
     }
 
-    if (body.auth.urlToken) {
+    if (body.auth?.urlToken) {
       const tokenResult = generateUrlToken();
       urlToken = tokenResult.token;
       authData.urlTokenHash = tokenResult.hash;
+    }
+
+    if (body.auth?.signToRead === true) {
+      authData.signToRead = true;
+    }
+
+    if (!authData.passwordHash && !authData.urlTokenHash && !authData.signToRead) {
+      authData = undefined;
     }
   } else if (existingPage?.auth) {
     authData = existingPage.auth;
@@ -317,6 +326,11 @@ pages.post('/:id', async (c) => {
   // Validate recipientKeyId is a 43-char base64url fingerprint (when present)
   if (recipientKeyId && !isValidFingerprint(recipientKeyId)) {
     return errorResponse(ErrorCodes.INVALID_REQUEST, 'recipientKeyId must be a 43-character base64url public key fingerprint (SHA-256 of the Ed25519 public key)', 400);
+  }
+
+  const effectiveRecipientKeyId = recipientKeyId === undefined ? existingPage?.recipientKeyId : (recipientKeyId || undefined);
+  if (authData?.signToRead && !effectiveRecipientKeyId) {
+    return errorResponse(ErrorCodes.PAGE_INVALID_AUTH, 'auth.signToRead requires recipientKeyId', 400);
   }
 
   const { page, created } = await services.pages.save(

@@ -8,7 +8,7 @@ import { render } from '../routes/render.js';
 import { initDatabase, closeDatabase } from '../storage/db.js';
 import { config } from '../config.js';
 import { rmSync } from 'fs';
-import { createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
+import { createSignedHeaders, createTestSigner, jsonSignedRequest, type TestSigner } from './helpers/signing.js';
 import { createServices, type Services } from '../services/container.js';
 
 const TEST_DB_PATH = './data/test-subdomains.lmdb';
@@ -22,6 +22,19 @@ let testId: number;
 const uniqueId = (base: string) => `${base}-${testId++}`;
 let signer: TestSigner;
 let otherSigner: TestSigner;
+
+function signedGetRequest(signer: TestSigner, path: string, host: string): Request {
+  const headers = {
+    ...createSignedHeaders({
+      signer,
+      method: 'GET',
+      path,
+      body: '',
+    }),
+    host,
+  };
+  return new Request(`http://${host}${path}`, { method: 'GET', headers });
+}
 
 // Create services
 const services = createServices();
@@ -240,6 +253,37 @@ describe('Subdomains', () => {
       expect(body.subdomain).toBe(name);
       expect(body.url).toContain(name);
       expect(body.path).toBe('/');
+    });
+
+    it('should serve sign-to-read subdomain pages only to the matching signed GET key', async () => {
+      const name = uniqueId('private-site');
+      await app.request(`/v1/subdomains/${name}`, jsonSignedRequest({ signer, method: 'POST', path: `/v1/subdomains/${name}` }));
+
+      const publishRes = await app.request('/v1/pages/index', {
+        ...jsonSignedRequest({
+          signer,
+          method: 'POST',
+          path: '/v1/pages/index',
+          headers: { 'X-Subdomain': name },
+          body: {
+            html: '<h1>Private Subdomain Home</h1>',
+            recipientKeyId: signer.publicKeyFingerprint,
+            auth: { signToRead: true },
+          },
+        }),
+      });
+      expect(publishRes.status).toBe(201);
+
+      const host = `${name}.${config.subdomains.baseDomain}`;
+      const unsigned = await app.request('/', { headers: { host } });
+      expect(unsigned.status).toBe(401);
+
+      const wrongKey = await app.request(signedGetRequest(otherSigner, '/', host));
+      expect(wrongKey.status).toBe(401);
+
+      const signed = await app.request(signedGetRequest(signer, '/', host));
+      expect(signed.status).toBe(200);
+      expect(await signed.text()).toContain('Private Subdomain Home');
     });
 
     it('should publish nested path to subdomain', async () => {
