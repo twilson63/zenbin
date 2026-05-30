@@ -20,12 +20,14 @@ Detailed plan with steps and success criteria for each phase.
 
 - Create SKILL.md at `~/.openclaw/skills/zenbin-wiki/SKILL.md`
 - Include: Quick Start, Entry Structure, Attributes, Publishing the Index, Searching, Workflows (on publish, on recall, on private publish, on maintenance), Tag Conventions, Categories, Reserved Slugs, Private Memory (sign-to-read, reading private pages, index entries for private, agent-to-agent)
+- Make the second-brain rule explicit: agent memory, journals, internal decisions, working context, and private notes should be published with `recipientKeyId` + `auth.signToRead: true` (CLI: `--recipient me --sign-to-read`), not as public pages. Clarify that `recipientKeyId` alone is routing metadata, not privacy.
 
 **Success Criteria:**
 - [ ] SKILL.md exists at `~/.openclaw/skills/zenbin-wiki/SKILL.md`
 - [ ] Frontmatter includes `name: zenbin-wiki` and `description` with trigger keywords
 - [ ] All sections present: Quick Start, Entry Structure, Private Memory, Workflows, Tags, Categories
 - [ ] Private memory section covers: sign-to-read publish, signed GET reading, index entries with `data-visibility="private"`, agent-to-agent
+- [ ] Skill explicitly says second-brain / memory pages default to private sign-to-read and that public `_wiki` entries must be metadata-only
 
 ### Step 0.3: Verify Convention + Skill Are Consistent
 
@@ -36,6 +38,7 @@ Detailed plan with steps and success criteria for each phase.
 - [ ] Category values match between convention page and SKILL.md
 - [ ] Workflow steps match between convention page and SKILL.md
 - [ ] Private memory description matches between convention page and SKILL.md
+- [ ] Both docs warn that `recipientKeyId` alone does not make a page private
 
 ---
 
@@ -143,7 +146,7 @@ Detailed plan with steps and success criteria for each phase.
 - [ ] Page with `auth.signToRead: true`: signed GET with matching key → 200 with page content
 - [ ] Page with `auth.signToRead: true`: signed GET with wrong key → 401
 - [ ] Page without `signToRead`: unsigned GET → 200 (no change in behavior)
-- [ ] Page with `signToRead` + password: either signature match OR correct password → 200
+- [ ] Page with `signToRead` + password auth allows either signature match OR correct password → 200
 - [ ] Rate limiting applies to failed sign-to-read attempts (same as password auth)
 
 ### Step 2.4: Write Tests for Sign-to-Read
@@ -159,7 +162,7 @@ Detailed plan with steps and success criteria for each phase.
   7. Publish with `signToRead: true` but no `recipientKeyId` → 400
   8. Public page still readable without signature
   9. Password-protected page without signToRead still works
-  10. Page with both signToRead and password: either auth method works
+  10. Page with both signToRead and password auth: either auth method works
 
 **Success Criteria:**
 - [ ] All 10 test cases pass
