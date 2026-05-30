@@ -28,7 +28,7 @@ describe('Type imports', () => {
     const limits: PlanLimits = {
       pagesPerMonth: 100,
       subdomains: 1,
-      maxPageSize: 512000,
+      maxPageSize: 2097152,
       videoStorageBytes: 0,
     };
     expect(limits.pagesPerMonth).toBe(100);

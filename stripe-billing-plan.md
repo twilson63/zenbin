@@ -17,13 +17,13 @@ Monetize ZenBin by charging agents for usage via Stripe's metered billing system
 ### Free Tier (current)
 - 100 pages/month
 - 1 subdomain
-- 512KB HTML+MD per page
+- 2MB HTML+MD per page
 - 5MB images
 
 ### Pro Tier — $4.99/mo
 - Unlimited pages
 - 5 subdomains
-- 512KB HTML+MD per page
+- 2MB HTML+MD per page
 - 5MB images
 - 50MB video storage
 - Analytics access

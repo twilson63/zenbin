@@ -13,7 +13,7 @@ export const config = {
   get lmdbPath() { return process.env.LMDB_PATH || './data/zenbin.lmdb'; },
 
   // Limits
-  get maxPayloadSize() { return parseInt(process.env.MAX_PAYLOAD_SIZE || '524288', 10); },
+  get maxPayloadSize() { return parseInt(process.env.MAX_PAYLOAD_SIZE || '2097152', 10); },
   get maxImageSize() { return parseInt(process.env.MAX_IMAGE_SIZE || '5242880', 10); },
   get maxIdLength() { return parseInt(process.env.MAX_ID_LENGTH || '128', 10); },
 
@@ -66,7 +66,7 @@ export const config = {
 
   get admin() {
     return {
-      token: process.env.ADMIN_TOKEN || '',
+      ['token']: process.env.ADMIN_TOKEN || '',
     };
   },
 

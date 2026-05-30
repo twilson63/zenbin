@@ -13,13 +13,13 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   free: {
     pagesPerMonth: 100,
     subdomains: 1,
-    maxPageSize: 512_000,      // 512KB
+    maxPageSize: 2_097_152,    // 2MB
     videoStorageBytes: 0,
   },
   pro: {
     pagesPerMonth: Infinity,
     subdomains: 5,
-    maxPageSize: 512_000,      // 512KB
+    maxPageSize: 2_097_152,    // 2MB
     videoStorageBytes: 52_428_800,  // 50MB
   },
   enterprise: {

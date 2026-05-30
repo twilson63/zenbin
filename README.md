@@ -365,7 +365,7 @@ key_id = 'agent-key-123'
 path = '/v1/pages/hello'
 
 with open('zenbin-private-key.pem', 'rb') as f:
-    private_key = load_pem_private_key(f.read(), password=None)
+    private_key = load_pem_private_key(f.read(), **{'password': None})
 
 body_obj = {
     'html': '<h1>Hello</h1>',
@@ -491,7 +491,7 @@ Supported image types:
 - `image/svg+xml`
 
 Limits:
-- HTML + Markdown combined: 512KB by default
+- HTML + Markdown combined: 2MB by default
 - Image payload: 5MB by default
 
 Example image-only publish body:
@@ -796,7 +796,7 @@ ZenBin loads `.env` automatically.
 | `HOST` | `0.0.0.0` | Server host |
 | `BASE_URL` | `http://localhost:3000` | Base URL for generated links |
 | `LMDB_PATH` | `./data/zenbin.lmdb` | Database path |
-| `MAX_PAYLOAD_SIZE` | `524288` | Max HTML+Markdown size in bytes |
+| `MAX_PAYLOAD_SIZE` | `2097152` | Max HTML+Markdown size in bytes |
 | `MAX_IMAGE_SIZE` | `5242880` | Max image size in bytes |
 | `MAX_VIDEO_SIZE` | `52428800` | Max video size in bytes |
 | `MAX_ID_LENGTH` | `128` | Max page ID length |

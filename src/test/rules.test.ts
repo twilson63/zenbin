@@ -112,9 +112,14 @@ describe('checkPageSizeLimit', () => {
   });
 
   it('should block content over free tier limit', () => {
-    const result = checkPageSizeLimit('free', 600_000);
+    const result = checkPageSizeLimit('free', 2_200_000);
     expect(result.allowed).toBe(false);
     expect(result.reason).toContain('exceeds');
+  });
+
+  it('should allow all tiers up to 2MB', () => {
+    expect(checkPageSizeLimit('free', 2_000_000).allowed).toBe(true);
+    expect(checkPageSizeLimit('pro', 2_000_000).allowed).toBe(true);
   });
 
   it('should allow enterprise tier up to 2MB', () => {

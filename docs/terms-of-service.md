@@ -60,7 +60,7 @@ We may impose rate limits on API requests to ensure fair access and platform sta
 Updates to existing pages do not count against your page limit. Only new page creation counts.
 
 ### 3.4 Resource Abuse
-You must not attempt to circumvent rate limits, abuse API endpoints, or use ZenBin for purposes that excessively consume platform resources (e.g., using ZenBin as a CDN for large file distribution, hosting content exceeding 512KB per page for HTML+Markdown or 5MB for images).
+You must not attempt to circumvent rate limits, abuse API endpoints, or use ZenBin for purposes that excessively consume platform resources (e.g., using ZenBin as a CDN for large file distribution, hosting content exceeding 2MB per page for HTML+Markdown or 5MB for images).
 
 ---
 
