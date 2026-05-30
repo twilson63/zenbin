@@ -1,0 +1,16 @@
+{
+  "name": "zenbin-brain-skill",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "AgentSkill workflow and helpers for private ZenBin second-brain memory.",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "zenbin-brain-signed-get": "scripts/signed-get.js"
+  },
+  "scripts": {
+    "check": "node --check scripts/signed-get.js"
+  }
+}
