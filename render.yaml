@@ -21,7 +21,7 @@ services:
       - key: VIDEO_STORAGE_PATH
         value: /var/data/videos
       - key: MAX_PAYLOAD_SIZE
-        value: 524288
+        value: 2097152
       - key: RATE_LIMIT_WINDOW_MS
         value: 60000
       - key: RATE_LIMIT_MAX_REQUESTS

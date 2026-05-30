@@ -85,8 +85,8 @@
 - [ ] Add `PLAN_LIMITS` constant:
   ```ts
   export const PLAN_LIMITS = {
-    free:       { pagesPerMonth: 100, subdomains: 1, maxPageSize: 512000, videoStorage: 0 },
-    pro:        { pagesPerMonth: Infinity, subdomains: 5, maxPageSize: 512000, videoStorage: 52428800 },
+    free:       { pagesPerMonth: 100, subdomains: 1, maxPageSize: 2097152, videoStorage: 0 },
+    pro:        { pagesPerMonth: Infinity, subdomains: 5, maxPageSize: 2097152, videoStorage: 52428800 },
     enterprise: { pagesPerMonth: Infinity, subdomains: Infinity, maxPageSize: 2097152, videoStorage: Infinity },
   };
   ```
