@@ -83,6 +83,13 @@ const getHtml = () => `<!DOCTYPE html>
       min-height: 72px;
     }
 
+    .nav-left {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      min-width: 0;
+    }
+
     .logo {
       display: inline-flex;
       align-items: center;
@@ -92,6 +99,7 @@ const getHtml = () => `<!DOCTYPE html>
       letter-spacing: -0.06em;
       font-size: 24px;
       cursor: pointer;
+      flex: 0 0 auto;
     }
 
     .logo-mark {
@@ -104,6 +112,40 @@ const getHtml = () => `<!DOCTYPE html>
       font-weight: 900;
       border-radius: 50%;
       box-shadow: 0 0 32px rgba(183, 255, 88, 0.32);
+    }
+
+    .nav-stats {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .stat-pill {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 7px;
+      padding: 8px 11px;
+      border: 1px solid rgba(255, 244, 216, 0.12);
+      border-radius: 999px;
+      background: rgba(255, 244, 216, 0.035);
+      white-space: nowrap;
+    }
+
+    .stat-value {
+      color: var(--cream);
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: -0.045em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      color: var(--soft);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
     .links {
@@ -382,11 +424,18 @@ const getHtml = () => `<!DOCTYPE html>
       .prompt-card { transform: none; }
       .cards, .pricing { grid-template-columns: 1fr; }
       .proof { grid-template-columns: 1fr; }
+      .nav-inner { gap: 18px; }
+      .links { gap: 18px; }
+      .stat-label { display: none; }
     }
 
     @media (max-width: 720px) {
       .wrap { width: min(100% - 28px, 1180px); }
       .links { display: none; }
+      .nav-left { width: 100%; justify-content: space-between; gap: 12px; }
+      .nav-stats { gap: 6px; }
+      .stat-pill { padding: 7px 9px; }
+      .stat-value { font-size: 13px; }
       .hero { padding: 54px 0 50px; }
       h1 { font-size: clamp(46px, 16vw, 68px); }
       section { padding: 58px 0; }
@@ -399,7 +448,13 @@ const getHtml = () => `<!DOCTYPE html>
 <body>
   <nav>
     <div class="wrap nav-inner">
-      <a class="logo" href="#top"><span class="logo-mark">z</span><span>zenbin</span></a>
+      <div class="nav-left">
+        <a class="logo" href="#top"><span class="logo-mark">z</span><span>zenbin</span></a>
+        <div class="nav-stats" aria-label="ZenBin usage metrics">
+          <div class="stat-pill"><span class="stat-value" id="page-count">--</span><span class="stat-label">pages</span></div>
+          <div class="stat-pill"><span class="stat-value" id="agent-count">--</span><span class="stat-label">agents</span></div>
+        </div>
+      </div>
       <div class="links">
         <a href="#services">Services</a>
         <a href="#how">How it works</a>
@@ -586,6 +641,23 @@ const getHtml = () => `<!DOCTYPE html>
   <script>
     const copyButton = document.querySelector('[data-copy-prompt]');
     const promptText = document.querySelector('#agent-prompt')?.textContent?.trim();
+    const pageCount = document.querySelector('#page-count');
+    const agentCount = document.querySelector('#agent-count');
+
+    const formatCount = (value) => typeof value === 'number' ? value.toLocaleString() : '--';
+
+    fetch('/v1/stats')
+      .then((response) => response.ok ? response.json() : null)
+      .then((stats) => {
+        if (!stats) return;
+        if (pageCount) pageCount.textContent = formatCount(stats.pages);
+        if (agentCount) agentCount.textContent = formatCount(stats.agents);
+      })
+      .catch(() => {
+        if (pageCount) pageCount.textContent = '--';
+        if (agentCount) agentCount.textContent = '--';
+      });
+
     copyButton?.addEventListener('click', async () => {
       if (!promptText) return;
       try {
