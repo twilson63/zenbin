@@ -7,11 +7,11 @@ import { ErrorCodes, errorResponse } from '../errors.js';
 import { generateEtag } from '../utils/etag.js';
 import { isValidFingerprint } from '../utils/fingerprint.js';
 import { generateUrlToken, hashPassword, parseBasicAuth, verifyPassword } from '../utils/auth.js';
-import { decodeHtml, decodeMarkdown, validateAuthInput, validateId, validatePageBody } from '../utils/validation.js';
+import { decodeHtml, decodeMarkdown, validateAuthInput, validateId, validatePageBody, validateAttestation } from '../utils/validation.js';
 import { trackApiCall, trackPageCreated, trackPageDeleted, trackPageUpdated } from '../analytics/posthog.js';
 import { validateSubdomainName } from './subdomains.js';
 import type { Services } from '../services/container.js';
-import type { Page } from '../types.js';
+import type { Page, Attestation } from '../types.js';
 
 const pages = new Hono();
 
@@ -43,6 +43,7 @@ interface CreatePageBody {
     signToRead?: boolean;
   } | null;
   recipientKeyId?: string;
+  attestation?: Attestation | null;
 }
 
 pages.use('*', requireSignedAgent);
@@ -60,7 +61,19 @@ pages.get('/', requireSignedAgentForGet, (c) => {
   const since = c.req.query('since') || undefined;
 
   let result;
-  if (recipientParam === 'me') {
+  const attestationSubject = c.req.query('attestation.subject');
+  const attestationType = c.req.query('attestation.type');
+
+  if (attestationSubject && attestationType) {
+    // Query by type AND subject
+    result = services.pages.listAttestationsByTypeAndSubject(attestationType, attestationSubject, cursor, limit, since);
+  } else if (attestationSubject) {
+    // Query by subject only
+    result = services.pages.listAttestationsBySubject(attestationSubject, cursor, limit, since);
+  } else if (attestationType) {
+    // Type-only query is not supported (would need type-only index)
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'attestation.type requires attestation.subject — type-only queries are not supported', 400);
+  } else if (recipientParam === 'me') {
     // recipient=me resolves to the authenticated key's fingerprint
     const recipientFingerprint = keyFingerprint || keyId;
     result = services.pages.listByRecipient(recipientFingerprint, cursor, limit, since);
@@ -99,6 +112,10 @@ pages.get('/', requireSignedAgentForGet, (c) => {
 
     if (p.recipientKeyId) {
       item.recipientKeyId = p.recipientKeyId;
+    }
+
+    if (p.attestation) {
+      item.attestation = p.attestation;
     }
 
     return item;
@@ -333,6 +350,37 @@ pages.post('/:id', async (c) => {
     return errorResponse(ErrorCodes.PAGE_INVALID_AUTH, 'auth.signToRead requires recipientKeyId', 400);
   }
 
+  // Extract attestation from header (priority) or body
+  // CAP-Attestation header is base64url-encoded JSON
+  // X-Zenbin-Attestation is the legacy alias
+  // null in body means "remove attestation"
+  let attestation: Attestation | null | undefined;
+  const capAttestationHeader = c.req.header('CAP-Attestation') ?? c.req.header('X-Zenbin-Attestation');
+  if (capAttestationHeader !== undefined) {
+    // Header present: decode base64url JSON
+    try {
+      const decoded = Buffer.from(capAttestationHeader, 'base64url').toString('utf-8');
+      const parsed = JSON.parse(decoded);
+      attestation = parsed;
+    } catch {
+      return errorResponse(ErrorCodes.INVALID_REQUEST, 'CAP-Attestation header must be valid base64url-encoded JSON', 400);
+    }
+  } else if (body.attestation !== undefined) {
+    // Body field present: use its value (null = remove)
+    attestation = body.attestation;
+  } else {
+    // Neither provided: keep existing value
+    attestation = undefined;
+  }
+
+  // Validate attestation if present (not null and not undefined)
+  if (attestation && attestation !== null) {
+    const attError = validateAttestation(attestation);
+    if (attError) {
+      return errorResponse(ErrorCodes.INVALID_REQUEST, attError.message, 400);
+    }
+  }
+
   const { page, created } = await services.pages.save(
     id,
     {
@@ -355,6 +403,7 @@ pages.post('/:id', async (c) => {
       publishMethod,
       publishPath,
       recipientKeyId,
+      attestation,
       status: 'active',
     },
     etag,
@@ -376,7 +425,7 @@ pages.post('/:id', async (c) => {
   const subdomainOrigin = subdomain ? `${protocol}://${subdomain}.${domain}` : undefined;
   const pageUrl = subdomain ? `${subdomainOrigin}${subdomainPath}` : `${baseUrl}/p/${page.id}`;
 
-  const response: Record<string, string> = {
+  const response: Record<string, unknown> = {
     id: page.id,
     url: pageUrl,
     etag: page.etag,
@@ -407,6 +456,10 @@ pages.post('/:id', async (c) => {
 
   if (page.recipientKeyId) {
     response.recipientKeyId = page.recipientKeyId;
+  }
+
+  if (page.attestation) {
+    response.attestation = page.attestation;
   }
 
   if (subdomain) {
