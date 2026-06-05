@@ -1,12 +1,13 @@
 import type { Context } from 'hono';
 import type { Page } from '../storage/db.js';
+import type { Attestation } from '../types.js';
 
 /**
  * Inject CAP Protocol provenance meta tags into HTML.
  * Adds <meta> tags for key-id, signature, digest, version, and recipient.
  */
 export function injectProvenanceMeta(html: string, page: Page): string {
-  if (!page.ownerKeyId && !page.publishSignature && !page.recipientKeyId) {
+  if (!page.ownerKeyId && !page.publishSignature && !page.recipientKeyId && !page.attestation) {
     return html;
   }
 
@@ -27,6 +28,13 @@ export function injectProvenanceMeta(html: string, page: Page): string {
   }
   if (page.recipientKeyId) {
     metaTags.push(`  <meta name="cap:recipient-key-id" content="${page.recipientKeyId}">`);
+  }
+
+  // Attestation meta tags
+  if (page.attestation) {
+    metaTags.push(`  <meta name="cap:attestation-type" content="${page.attestation.type}">`);
+    metaTags.push(`  <meta name="cap:attestation-subject-kind" content="${page.attestation.subject.kind}">`);
+    metaTags.push(`  <meta name="cap:attestation-subject-id" content="${page.attestation.subject.id}">`);
   }
 
   const provenanceBlock = metaTags.join('\n');
@@ -76,5 +84,16 @@ export function injectProvenanceHttpHeaders(c: Context, page: Page): void {
   if (page.recipientKeyId) {
     c.header('CAP-Recipient-Key-Id', page.recipientKeyId);
     c.header('X-Zenbin-Recipient-Key-Id', page.recipientKeyId);
+  }
+
+  // Attestation headers
+  if (page.attestation) {
+    c.header('CAP-Attestation-Type', page.attestation.type);
+    c.header('CAP-Attestation-Subject-Kind', page.attestation.subject.kind);
+    c.header('CAP-Attestation-Subject-Id', page.attestation.subject.id);
+    // Legacy X-Zenbin aliases
+    c.header('X-Zenbin-Attestation-Type', page.attestation.type);
+    c.header('X-Zenbin-Attestation-Subject-Kind', page.attestation.subject.kind);
+    c.header('X-Zenbin-Attestation-Subject-Id', page.attestation.subject.id);
   }
 }
