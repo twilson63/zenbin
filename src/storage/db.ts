@@ -12,6 +12,7 @@ import type {
   SubdomainResult,
   Plan,
   StoredJwk,
+  Attestation,
 } from '../types.js';
 
 // Re-export types for backward compatibility
@@ -26,6 +27,7 @@ export type {
   SubdomainResult,
   Plan,
   StoredJwk,
+  Attestation,
 };
 
 let db: Database<Page, string>;
@@ -35,6 +37,8 @@ let nonceDb: Database<NonceRecord, string>;
 let auditLogDb: Database<AuditLogRecord, string>;
 let ownerIndexDb: Database<PageSummary, string>;
 let recipientIndexDb: Database<PageSummary, string>;
+let attestationSubjectIndexDb: Database<PageSummary, string>;
+let attestationTypeSubjectIndexDb: Database<PageSummary, string>;
 
 // PageSummary — lightweight metadata for listing, never includes content
 export interface PageSummary {
@@ -47,6 +51,7 @@ export interface PageSummary {
   has_video: boolean;
   ownerKeyId: string;
   recipientKeyId?: string;
+  attestation?: import('../types.js').Attestation;
   created_at: string;
   updated_at: string;
   etag: string;
@@ -60,6 +65,8 @@ export function initDatabase(): {
   auditLogs: Database<AuditLogRecord, string>;
   ownerIndex: Database<PageSummary, string>;
   recipientIndex: Database<PageSummary, string>;
+  attestationSubjectIndex: Database<PageSummary, string>;
+  attestationTypeSubjectIndex: Database<PageSummary, string>;
 } {
   if (!db) {
     db = open<Page, string>({
@@ -103,6 +110,18 @@ export function initDatabase(): {
       compression: true,
     });
   }
+  if (!attestationSubjectIndexDb) {
+    attestationSubjectIndexDb = open<PageSummary, string>({
+      path: `${config.lmdbPath}-attestation-subject-index`,
+      compression: true,
+    });
+  }
+  if (!attestationTypeSubjectIndexDb) {
+    attestationTypeSubjectIndexDb = open<PageSummary, string>({
+      path: `${config.lmdbPath}-attestation-type-subject-index`,
+      compression: true,
+    });
+  }
 
   return {
     pages: db,
@@ -112,6 +131,8 @@ export function initDatabase(): {
     auditLogs: auditLogDb,
     ownerIndex: ownerIndexDb,
     recipientIndex: recipientIndexDb,
+    attestationSubjectIndex: attestationSubjectIndexDb,
+    attestationTypeSubjectIndex: attestationTypeSubjectIndexDb,
   };
 }
 
@@ -268,6 +289,20 @@ export function getRecipientIndexDatabase(): Database<PageSummary, string> {
   return recipientIndexDb;
 }
 
+export function getAttestationSubjectIndexDatabase(): Database<PageSummary, string> {
+  if (!attestationSubjectIndexDb) {
+    throw new Error('Database not initialized. Call initDatabase() first.');
+  }
+  return attestationSubjectIndexDb;
+}
+
+export function getAttestationTypeSubjectIndexDatabase(): Database<PageSummary, string> {
+  if (!attestationTypeSubjectIndexDb) {
+    throw new Error('Database not initialized. Call initDatabase() first.');
+  }
+  return attestationTypeSubjectIndexDb;
+}
+
 function pageStorageKey(id: string, subdomain?: string): string {
   return subdomain ? `${subdomain}:${id}` : id;
 }
@@ -302,6 +337,7 @@ export async function savePage(
     publishMethod?: string;
     publishPath?: string;
     recipientKeyId?: string | null;
+    attestation?: import('../types.js').Attestation | null;
     status?: 'active' | 'removed';
   },
   etag: string,
@@ -336,6 +372,7 @@ export async function savePage(
     publishMethod: data.publishMethod || existing?.publishMethod,
     publishPath: data.publishPath || existing?.publishPath,
     recipientKeyId: data.recipientKeyId === null ? undefined : (data.recipientKeyId !== undefined ? data.recipientKeyId : existing?.recipientKeyId),
+    attestation: data.attestation === null ? undefined : (data.attestation !== undefined ? data.attestation : existing?.attestation),
     status: data.status || existing?.status || 'active',
   };
 
@@ -349,6 +386,14 @@ export async function savePage(
     removePageFromRecipientIndex(existing);
   }
   addPageToRecipientIndex(page);
+
+  // Update attestation indexes: remove old if changed, add new if present
+  if (existing?.attestation && existing.attestation !== page.attestation) {
+    removePageFromAttestationIndexes(existing);
+  }
+  if (page.attestation) {
+    addPageToAttestationIndexes(page);
+  }
 
   return {
     page,
@@ -374,6 +419,11 @@ export async function deletePage(id: string, subdomain?: string): Promise<boolea
 
   // Remove from recipient index
   removePageFromRecipientIndex(existing);
+
+  // Remove from attestation indexes
+  if (existing.attestation) {
+    removePageFromAttestationIndexes(existing);
+  }
 
   return true;
 }
@@ -437,6 +487,7 @@ export function listPagesBySubdomainPaginated(
           has_video: !!page.video,
           ownerKeyId: page.ownerKeyId || '',
           recipientKeyId: page.recipientKeyId,
+          attestation: page.attestation,
           created_at: page.created_at,
           updated_at: page.updated_at,
           etag: page.etag,
@@ -694,6 +745,7 @@ export function addPageToOwnerIndex(page: Page): void {
     has_video: !!page.video,
     ownerKeyId: page.ownerKeyId,
     recipientKeyId: page.recipientKeyId,
+    attestation: page.attestation,
     created_at: page.created_at,
     updated_at: page.updated_at,
     etag: page.etag,
@@ -774,6 +826,7 @@ export function addPageToRecipientIndex(page: Page): void {
     has_video: !!page.video,
     ownerKeyId: page.ownerKeyId || '',
     recipientKeyId: page.recipientKeyId,
+    attestation: page.attestation,
     created_at: page.created_at,
     updated_at: page.updated_at,
     etag: page.etag,
@@ -831,6 +884,173 @@ export function listPagesByRecipient(
   const nextCursor = total > pages.length && lastPage ? `${recipientKeyId}/${lastPage.subdomain ? lastPage.subdomain + ':' : ''}${lastPage.id}` : null;
 
   return { pages, total, next_cursor: nextCursor };
+}
+
+// ─── Attestation Indexes ────────────────────────────────────
+
+function attestationSubjectIndexKey(page: Page): string {
+  const subjectId = page.attestation!.subject.id;
+  const ownerKeyId = page.ownerKeyId || '';
+  return `${encodeURIComponent(subjectId)}:${ownerKeyId}`;
+}
+
+function attestationTypeSubjectIndexKey(page: Page): string {
+  const att = page.attestation!;
+  const subjectId = att.subject.id;
+  const ownerKeyId = page.ownerKeyId || '';
+  return `${att.type}:${encodeURIComponent(subjectId)}:${ownerKeyId}`;
+}
+
+export function addPageToAttestationIndexes(page: Page): void {
+  if (!page.attestation || !page.ownerKeyId) return;
+
+  const summary: PageSummary = {
+    id: page.id,
+    subdomain: page.subdomain ?? null,
+    title: page.title,
+    content_type: page.content_type,
+    has_markdown: !!page.markdown,
+    has_image: !!page.image,
+    has_video: !!page.video,
+    ownerKeyId: page.ownerKeyId,
+    recipientKeyId: page.recipientKeyId,
+    attestation: page.attestation,
+    created_at: page.created_at,
+    updated_at: page.updated_at,
+    etag: page.etag,
+  };
+
+  const subjectKey = attestationSubjectIndexKey(page);
+  getAttestationSubjectIndexDatabase().putSync(subjectKey, summary);
+
+  const typeSubjectKey = attestationTypeSubjectIndexKey(page);
+  getAttestationTypeSubjectIndexDatabase().putSync(typeSubjectKey, summary);
+}
+
+export function removePageFromAttestationIndexes(page: Page): void {
+  if (!page.attestation || !page.ownerKeyId) return;
+
+  const subjectKey = attestationSubjectIndexKey(page);
+  try {
+    getAttestationSubjectIndexDatabase().removeSync(subjectKey);
+  } catch {
+    // Key may not exist
+  }
+
+  const typeSubjectKey = attestationTypeSubjectIndexKey(page);
+  try {
+    getAttestationTypeSubjectIndexDatabase().removeSync(typeSubjectKey);
+  } catch {
+    // Key may not exist
+  }
+}
+
+export function listAttestationsBySubject(
+  subjectId: string,
+  cursor?: string,
+  limit: number = 50,
+  since?: string,
+): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+  const idxDb = getAttestationSubjectIndexDatabase();
+  const encodedSubjectId = encodeURIComponent(subjectId);
+  const prefix = `${encodedSubjectId}:`;
+  const pages: PageSummary[] = [];
+  let total = 0;
+
+  for (const key of idxDb.getKeys({ start: prefix })) {
+    if (!key.startsWith(prefix)) break;
+
+    if (cursor && key <= cursor) {
+      continue;
+    }
+
+    const summary = idxDb.get(key);
+    if (!summary) continue;
+
+    // Apply since filter (inclusive)
+    if (since && summary.created_at < since) continue;
+
+    total++;
+    if (pages.length < limit) {
+      pages.push(summary);
+    }
+  }
+
+  const lastPage = pages.length > 0 ? pages[pages.length - 1] : null;
+  const nextCursor = total > pages.length && lastPage
+    ? `${encodedSubjectId}:${lastPage.ownerKeyId}`
+    : null;
+
+  return { pages, total, next_cursor: nextCursor };
+}
+
+export function listAttestationsByTypeAndSubject(
+  type: string,
+  subjectId: string,
+  cursor?: string,
+  limit: number = 50,
+  since?: string,
+): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+  const idxDb = getAttestationTypeSubjectIndexDatabase();
+  const encodedSubjectId = encodeURIComponent(subjectId);
+  const prefix = `${type}:${encodedSubjectId}:`;
+  const pages: PageSummary[] = [];
+  let total = 0;
+
+  for (const key of idxDb.getKeys({ start: prefix })) {
+    if (!key.startsWith(prefix)) break;
+
+    if (cursor && key <= cursor) {
+      continue;
+    }
+
+    const summary = idxDb.get(key);
+    if (!summary) continue;
+
+    // Apply since filter (inclusive)
+    if (since && summary.created_at < since) continue;
+
+    total++;
+    if (pages.length < limit) {
+      pages.push(summary);
+    }
+  }
+
+  const lastPage = pages.length > 0 ? pages[pages.length - 1] : null;
+  const nextCursor = total > pages.length && lastPage
+    ? `${type}:${encodedSubjectId}:${lastPage.ownerKeyId}`
+    : null;
+
+  return { pages, total, next_cursor: nextCursor };
+}
+
+export function backfillAttestationIndexes(): { indexed: number; skipped: number } {
+  const pagesDb = getDatabase();
+  let indexed = 0;
+  let skipped = 0;
+
+  for (const key of pagesDb.getKeys({})) {
+    const page = pagesDb.get(key);
+    if (!page) continue;
+
+    if (!page.attestation || !page.ownerKeyId) {
+      skipped++;
+      continue;
+    }
+
+    // Check if already indexed
+    const subjectKey = attestationSubjectIndexKey(page);
+    const idxDb = getAttestationSubjectIndexDatabase();
+    const existing = idxDb.get(subjectKey);
+    if (existing) {
+      continue; // Already indexed
+    }
+
+    addPageToAttestationIndexes(page);
+    indexed++;
+  }
+
+  return { indexed, skipped };
 }
 
 // ─── Billing-Related Storage ───────────────────────────────
@@ -911,5 +1131,13 @@ export async function closeDatabase(): Promise<void> {
   if (recipientIndexDb) {
     await recipientIndexDb.close();
     recipientIndexDb = undefined as unknown as Database<PageSummary, string>;
+  }
+  if (attestationSubjectIndexDb) {
+    await attestationSubjectIndexDb.close();
+    attestationSubjectIndexDb = undefined as unknown as Database<PageSummary, string>;
+  }
+  if (attestationTypeSubjectIndexDb) {
+    await attestationTypeSubjectIndexDb.close();
+    attestationTypeSubjectIndexDb = undefined as unknown as Database<PageSummary, string>;
   }
 }
