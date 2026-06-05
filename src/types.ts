@@ -5,6 +5,32 @@
  * Services, routes, and storage all import from here.
  */
 
+// ─── Attestation ───────────────────────────────────────────
+
+export interface Attestation {
+  /** What kind of claim this is */
+  type: string;
+
+  /** What the claim is about */
+  subject: {
+    /** "agent" or "asset" */
+    kind: 'agent' | 'asset';
+
+    /** For agent: SHA-256 fingerprint of the subject's Ed25519 public key (43-char base64url)
+     *  For asset: signed page reference — {ownerKeyId}/{pageId} */
+    id: string;
+  };
+
+  /** Optional: human-readable context about this claim */
+  context?: string;
+
+  /** Optional: structured metadata (type-specific) */
+  metadata?: Record<string, unknown>;
+
+  /** Optional: timestamp when the attestation was made (defaults to CAP-Timestamp) */
+  timestamp?: string;
+}
+
 // ─── Stored JWK ───────────────────────────────────────────
 
 type StoredJwk = Record<string, string | boolean | undefined>;
@@ -66,6 +92,7 @@ export interface Page {
   publishMethod?: string;
   publishPath?: string;
   recipientKeyId?: string;
+  attestation?: Attestation;
   status?: 'active' | 'removed';
 }
 

@@ -1,4 +1,6 @@
 import { config, ID_PATTERN } from '../config.js';
+import type { Attestation } from '../types.js';
+import { isValidFingerprint } from './fingerprint.js';
 
 export interface ValidationError {
   field: string;
@@ -314,6 +316,112 @@ const BLOCKED_HEADER_NAMES = new Set([
   'trailer',
   'authorization', // Already handled by bearer/basic auth types
 ]);
+
+/**
+ * Validate a signed page reference (asset subject ID).
+ * Format: {ownerKeyId}/{pageId}
+ * - Must contain exactly one slash
+ * - Both segments must be non-empty
+ * - Segments must match [a-zA-Z0-9_.-]+
+ */
+export function isValidSignedPageRef(ref: string): boolean {
+  const parts = ref.split('/');
+  if (parts.length !== 2) return false;
+  const [ownerKeyId, pageId] = parts;
+  if (!ownerKeyId || !pageId) return false;
+  const segmentPattern = /^[a-zA-Z0-9_.-]+$/;
+  return segmentPattern.test(ownerKeyId) && segmentPattern.test(pageId);
+}
+
+/**
+ * Validate an attestation object.
+ * Returns null if valid, or a ValidationError if invalid.
+ */
+export function validateAttestation(attestation: unknown): ValidationError | null {
+  if (!attestation || typeof attestation !== 'object') {
+    return { field: 'attestation', message: 'attestation must be an object' };
+  }
+
+  const att = attestation as Record<string, unknown>;
+
+  // type is required
+  if (!att.type || typeof att.type !== 'string') {
+    return { field: 'attestation.type', message: 'attestation type is required and must be a string' };
+  }
+
+  // subject is required
+  if (!att.subject || typeof att.subject !== 'object') {
+    return { field: 'attestation.subject', message: 'attestation subject is required and must be an object' };
+  }
+
+  const subject = att.subject as Record<string, unknown>;
+
+  // subject.kind must be "agent" or "asset"
+  if (subject.kind !== 'agent' && subject.kind !== 'asset') {
+    return { field: 'attestation.subject.kind', message: 'attestation subject kind must be "agent" or "asset"' };
+  }
+
+  // subject.id is required
+  if (typeof subject.id !== 'string' || !subject.id) {
+    return { field: 'attestation.subject.id', message: 'attestation subject id is required and must be a string' };
+  }
+
+  // Validate subject.id based on kind
+  if (subject.kind === 'agent') {
+    // Agent subject: must be a 43-char base64url SHA-256 fingerprint
+    if (!isValidFingerprint(subject.id)) {
+      return { field: 'attestation.subject.id', message: 'agent subject id must be a 43-character base64url public key fingerprint (SHA-256 of Ed25519 public key)' };
+    }
+  } else {
+    // Asset subject: must be a valid signed page reference {ownerKeyId}/{pageId}
+    if (!isValidSignedPageRef(subject.id)) {
+      return { field: 'attestation.subject.id', message: 'asset subject id must be a valid signed page reference (ownerKeyId/pageId)' };
+    }
+  }
+
+  // context is optional, max 500 chars
+  if (att.context !== undefined) {
+    if (typeof att.context !== 'string') {
+      return { field: 'attestation.context', message: 'attestation context must be a string' };
+    }
+    if (att.context.length > 500) {
+      return { field: 'attestation.context', message: 'attestation context must be 500 characters or less' };
+    }
+  }
+
+  // metadata is optional, max 2KB, flat values only
+  if (att.metadata !== undefined) {
+    if (typeof att.metadata !== 'object' || att.metadata === null) {
+      return { field: 'attestation.metadata', message: 'attestation metadata must be an object' };
+    }
+    const metadataJson = JSON.stringify(att.metadata);
+    if (metadataJson.length > 2048) {
+      return { field: 'attestation.metadata', message: 'attestation metadata must be 2KB or less' };
+    }
+    // Check for nested values
+    for (const [key, value] of Object.entries(att.metadata as Record<string, unknown>)) {
+      if (typeof key !== 'string') {
+        return { field: 'attestation.metadata', message: 'attestation metadata keys must be strings' };
+      }
+      if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+        return { field: 'attestation.metadata', message: 'attestation metadata values must be strings, numbers, or booleans (no nested objects or arrays)' };
+      }
+    }
+  }
+
+  // timestamp is optional, must be valid ISO-8601
+  if (att.timestamp !== undefined) {
+    if (typeof att.timestamp !== 'string') {
+      return { field: 'attestation.timestamp', message: 'attestation timestamp must be a string' };
+    }
+    const parsed = Date.parse(att.timestamp);
+    if (isNaN(parsed)) {
+      return { field: 'attestation.timestamp', message: 'attestation timestamp must be a valid ISO-8601 date string' };
+    }
+  }
+
+  return null;
+}
 
 /**
  * Validate a proxy request body
