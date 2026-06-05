@@ -14,6 +14,8 @@ import {
   listPagesBySubdomainPaginated as dbListPagesBySubdomainPaginated,
   listPagesByOwner as dbListPagesByOwner,
   listPagesByRecipient as dbListPagesByRecipient,
+  listAttestationsBySubject as dbListAttestationsBySubject,
+  listAttestationsByTypeAndSubject as dbListAttestationsByTypeAndSubject,
   incrementAgentKeyUsage,
   decrementSubdomainPageCount as dbDecrementSubdomainPageCount,
   incrementSubdomainPageCount as dbIncrementSubdomainPageCount,
@@ -51,6 +53,7 @@ export class PageService implements IPageService {
       publishMethod?: string;
       publishPath?: string;
       recipientKeyId?: string | null;
+      attestation?: import('../types.js').Attestation | null;
       status?: 'active' | 'removed';
     },
     etag: string,
@@ -176,5 +179,19 @@ export class PageService implements IPageService {
    */
   listByRecipient(recipientKeyId: string, cursor?: string, limit?: number, since?: string): { pages: PageSummary[]; total: number; next_cursor: string | null } {
     return dbListPagesByRecipient(recipientKeyId, cursor, limit, since);
+  }
+
+  /**
+   * List attestations by subject.
+   */
+  listAttestationsBySubject(subjectId: string, cursor?: string, limit?: number, since?: string): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+    return dbListAttestationsBySubject(subjectId, cursor, limit, since);
+  }
+
+  /**
+   * List attestations by type and subject.
+   */
+  listAttestationsByTypeAndSubject(type: string, subjectId: string, cursor?: string, limit?: number, since?: string): { pages: PageSummary[]; total: number; next_cursor: string | null } {
+    return dbListAttestationsByTypeAndSubject(type, subjectId, cursor, limit, since);
   }
 }

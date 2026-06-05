@@ -218,6 +218,10 @@ render.get('/:id', async (c) => {
       response.recipientKeyId = page.recipientKeyId;
     }
 
+    if (page.attestation) {
+      response.attestation = page.attestation;
+    }
+
     c.header('ETag', jsonEtag);
     c.header('Cache-Control', 'public, max-age=0, must-revalidate');
     trackRequestView(c, id);

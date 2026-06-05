@@ -42,6 +42,7 @@ export interface IPageService {
     publishMethod?: string;
     publishPath?: string;
     recipientKeyId?: string | null;
+    attestation?: import('../types.js').Attestation | null;
     status?: 'active' | 'removed';
   }, etag: string): Promise<SaveResult>;
 
@@ -68,6 +69,10 @@ export interface IPageService {
 
   // Recipient-based listing
   listByRecipient(recipientKeyId: string, cursor?: string, limit?: number, since?: string): { pages: PageSummary[]; total: number; next_cursor: string | null };
+
+  // Attestation-based listing
+  listAttestationsBySubject(subjectId: string, cursor?: string, limit?: number, since?: string): { pages: PageSummary[]; total: number; next_cursor: string | null };
+  listAttestationsByTypeAndSubject(type: string, subjectId: string, cursor?: string, limit?: number, since?: string): { pages: PageSummary[]; total: number; next_cursor: string | null };
 }
 
 // ─── Subdomain Service ──────────────────────────────────────
