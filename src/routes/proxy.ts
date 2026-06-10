@@ -1,30 +1,23 @@
 import { Hono } from 'hono';
-import { Agent } from 'undici';
+import { Agent, buildConnector } from 'undici';
 import { config } from '../config.js';
 import { validateProxyRequest, ProxyRequest } from '../utils/validation.js';
 import { resolveAndValidate } from '../utils/ssrf.js';
 
+// Default undici connector, wrapped below to dial a pre-validated IP.
+const baseConnector = buildConnector({});
+
 /**
  * Build an undici dispatcher that pins every connection to a pre-validated IP,
  * so the network stack cannot re-resolve the hostname to a different (e.g.
- * rebound, private) address after our SSRF check. The Host header / SNI is
- * still derived from the original URL by fetch().
+ * rebound, private) address after our SSRF check. We override the connector to
+ * dial the validated IP directly while keeping the TLS servername (SNI) and
+ * Host bound to the original hostname, so certificate validation still works.
  */
-function pinnedDispatcher(ip: string): Agent {
-  const family = ip.includes(':') ? 6 : 4;
+function pinnedDispatcher(ip: string, hostname: string): Agent {
   return new Agent({
-    connect: {
-      // undici may invoke lookup in either the `all` form (expects an array of
-      // { address, family }) or the legacy form (expects address + family
-      // positional args), depending on version. Handle both so the pinned IP
-      // is honored regardless.
-      lookup: (_hostname: string, options: any, callback: any) => {
-        if (options && options.all) {
-          callback(null, [{ address: ip, family }]);
-        } else {
-          callback(null, ip, family);
-        }
-      },
+    connect(opts: any, callback: any) {
+      baseConnector({ ...opts, hostname: ip, servername: opts.servername || hostname }, callback);
     },
   });
 }
@@ -99,11 +92,12 @@ proxy.post('/', async (c) => {
     }
   }
 
-  // 6. SSRF validation (resolveAndValidate) — capture the validated IP so the
-  // outgoing fetch connects to exactly that address (no re-resolution).
+  // 6. SSRF validation (resolveAndValidate) — capture the validated IP + host so
+  // the outgoing fetch connects to exactly that address (no re-resolution).
   let pinnedIp: string;
+  let pinnedHost: string;
   try {
-    ({ ip: pinnedIp } = await resolveAndValidate(proxyReq.url));
+    ({ ip: pinnedIp, hostname: pinnedHost } = await resolveAndValidate(proxyReq.url));
   } catch (err) {
     const message = err instanceof Error ? err.message : 'SSRF validation failed';
     return c.json({ error: message }, 400);
@@ -160,7 +154,7 @@ proxy.post('/', async (c) => {
         signal: controller.signal,
         redirect: 'manual',
         // Pin the connection to the validated IP for the current URL.
-        dispatcher: pinnedDispatcher(pinnedIp),
+        dispatcher: pinnedDispatcher(pinnedIp, pinnedHost),
       };
 
       // Only include body on first request and if method supports it
@@ -182,7 +176,7 @@ proxy.post('/', async (c) => {
 
         // Validate redirect target for SSRF and re-pin to its validated IP.
         try {
-          ({ ip: pinnedIp } = await resolveAndValidate(redirectUrl));
+          ({ ip: pinnedIp, hostname: pinnedHost } = await resolveAndValidate(redirectUrl));
         } catch (err) {
           clearTimeout(timeoutId);
           const message = err instanceof Error ? err.message : 'SSRF validation failed on redirect';
