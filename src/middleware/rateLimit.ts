@@ -1,10 +1,15 @@
 import { Context, Next } from 'hono';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { config } from '../config.js';
 
 interface RateLimitEntry {
   count: number;
   resetAt: number;
 }
+
+// Hard cap on distinct tracked keys, to bound memory if an attacker rotates
+// identities faster than the cleanup interval.
+const MAX_RATE_LIMIT_ENTRIES = 100_000;
 
 // Simple in-memory rate limiter
 // For production, consider using Redis or a distributed store
@@ -21,19 +26,25 @@ setInterval(() => {
 }, 60000); // Clean every minute
 
 function getClientIp(c: Context): string {
-  // Check common proxy headers
-  const forwarded = c.req.header('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  
-  const realIp = c.req.header('x-real-ip');
-  if (realIp) {
-    return realIp;
+  // Only trust proxy headers when explicitly running behind a trusted proxy —
+  // otherwise X-Forwarded-For is client-spoofable and defeats the limiter.
+  if (config.trustProxy) {
+    const forwarded = c.req.header('x-forwarded-for');
+    if (forwarded) {
+      const parts = forwarded.split(',').map((s) => s.trim()).filter(Boolean);
+      // Rightmost hop is the one added by our trusted proxy.
+      if (parts.length > 0) return parts[parts.length - 1];
+    }
+    const realIp = c.req.header('x-real-ip');
+    if (realIp) return realIp;
   }
 
-  // Fallback to a default (in production, you'd want the actual IP)
-  return 'unknown';
+  // Fall back to the real socket address.
+  try {
+    return getConnInfo(c).remote.address || 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 export async function rateLimit(c: Context, next: Next) {
@@ -50,6 +61,12 @@ export async function rateLimit(c: Context, next: Next) {
       count: 1,
       resetAt: now + windowMs,
     };
+    // Bound memory: if the store is saturated, evict expired entries first.
+    if (rateLimitStore.size >= MAX_RATE_LIMIT_ENTRIES) {
+      for (const [k, e] of rateLimitStore.entries()) {
+        if (e.resetAt < now) rateLimitStore.delete(k);
+      }
+    }
     rateLimitStore.set(ip, entry);
   } else {
     entry.count++;

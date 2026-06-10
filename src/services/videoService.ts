@@ -25,8 +25,11 @@ export class VideoService implements IVideoService {
     return dbVideoExists(path);
   }
 
-  getPath(id: string, subdomain?: string): string {
-    return dbGetVideoPath(id);
+  // Resolve a stored relative video path (e.g. "sub/id.mp4") to its absolute
+  // filesystem path. The argument is the value persisted in page.video, not a
+  // bare id — passing an id would yield a wrong path.
+  getPath(relativePath: string): string {
+    return dbGetVideoPath(relativePath);
   }
 
   getMimeType(path: string): string | undefined {

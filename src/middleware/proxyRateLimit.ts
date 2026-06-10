@@ -1,10 +1,14 @@
 import { Context, Next } from 'hono';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { config } from '../config.js';
 
 interface RateLimitEntry {
   count: number;
   resetAt: number;
 }
+
+// Hard cap on distinct tracked keys, to bound memory under identity rotation.
+const MAX_RATE_LIMIT_ENTRIES = 100_000;
 
 // Separate in-memory rate limiter for proxy endpoint
 // For production, consider using Redis or a distributed store
@@ -21,19 +25,22 @@ setInterval(() => {
 }, 60000); // Clean every minute
 
 function getClientIp(c: Context): string {
-  // Check common proxy headers
-  const forwarded = c.req.header('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  
-  const realIp = c.req.header('x-real-ip');
-  if (realIp) {
-    return realIp;
+  // Only trust proxy headers when explicitly running behind a trusted proxy.
+  if (config.trustProxy) {
+    const forwarded = c.req.header('x-forwarded-for');
+    if (forwarded) {
+      const parts = forwarded.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 0) return parts[parts.length - 1];
+    }
+    const realIp = c.req.header('x-real-ip');
+    if (realIp) return realIp;
   }
 
-  // Fallback to a default (in production, you'd want the actual IP)
-  return 'unknown';
+  try {
+    return getConnInfo(c).remote.address || 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 export async function proxyRateLimit(c: Context, next: Next) {
@@ -51,6 +58,11 @@ export async function proxyRateLimit(c: Context, next: Next) {
       count: 1,
       resetAt: now + windowMs,
     };
+    if (proxyRateLimitStore.size >= MAX_RATE_LIMIT_ENTRIES) {
+      for (const [k, e] of proxyRateLimitStore.entries()) {
+        if (e.resetAt < now) proxyRateLimitStore.delete(k);
+      }
+    }
     proxyRateLimitStore.set(key, entry);
   } else {
     entry.count++;

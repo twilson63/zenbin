@@ -32,13 +32,11 @@ let otherSigner: TestSigner;
 function signedGetRequest(signer: TestSigner, path: string): Request {
   const timestamp = new Date().toISOString();
   const nonce = `nonce-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  // Strip query params from the path used for signing (c.req.path doesn't include them)
-  const pathForSigning = path.split('?')[0];
-
+  // The signature now covers the full request target (path + query string).
   const headers = createSignedHeaders({
     signer,
     method: 'GET',
-    path: pathForSigning,
+    path,
     body: '',
     timestamp,
     nonce,

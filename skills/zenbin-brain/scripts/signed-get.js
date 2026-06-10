@@ -39,12 +39,14 @@ function loadKeys(keyfile) {
   return JSON.parse(fs.readFileSync(keyfile, 'utf8'));
 }
 
-function signGet(urlPath, keys) {
+// `target` must be the full request target: pathname + query string. The
+// server signs path+query, so query parameters must be included here too.
+function signGet(target, keys) {
   const timestamp = new Date().toISOString();
   const nonce = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
   const digest = crypto.createHash('sha256').update('').digest('base64');
   const contentDigest = `sha-256=:${digest}:`;
-  const canonical = ['GET', urlPath, timestamp, nonce, contentDigest].join('\n');
+  const canonical = ['GET', target, timestamp, nonce, contentDigest].join('\n');
   const privateKey = crypto.createPrivateKey({ key: keys.privateJwk, format: 'jwk' });
   const signature = crypto.sign(null, Buffer.from(canonical, 'utf8'), privateKey);
   return {
@@ -127,7 +129,7 @@ async function main() {
 
   if (args.verify) {
     const unsigned = await get(url.toString());
-    const signed = await get(url.toString(), signGet(url.pathname, keys));
+    const signed = await get(url.toString(), signGet(url.pathname + url.search, keys));
     const ok = unsigned.status === 401 && signed.status === 200;
     const result = {
       ok,
@@ -144,7 +146,7 @@ async function main() {
     process.exit(ok ? 0 : 1);
   }
 
-  const res = await get(url.toString(), signGet(url.pathname, keys));
+  const res = await get(url.toString(), signGet(url.pathname + url.search, keys));
   if (args.json) {
     emitJson({ status: res.status, url: url.toString(), headers: res.headers, body: res.body, hint: authHint(res.status) });
     process.exit(res.status === 200 ? 0 : 1);

@@ -55,6 +55,8 @@ export interface IPageService {
   // Billing-aware helpers
   checkPublishLimit(keyId: string, id: string, subdomain?: string): LimitCheckResult;
   trackPageCreation(keyId: string): void;
+  reservePageQuota(keyId: string): { allowed: boolean; reason?: string; plan: Plan };
+  releasePageQuota(keyId: string): void;
 
   // Video helpers
   saveVideoFile(id: string, buffer: Buffer, mimeType: string, subdomain?: string): Promise<string>;
@@ -88,6 +90,7 @@ export interface ISubdomainService {
   // Billing-aware helpers
   checkClaimLimit(keyId: string): LimitCheckResult;
   trackSubdomainClaim(keyId: string): void;
+  reserveAndClaim(name: string, ownerKeyId: string | undefined, plan: Plan): { allowed: boolean; reason?: string; created: boolean; subdomain?: Subdomain };
 
   // Validation
   validateName(name: string): { valid: boolean; error?: string };
@@ -138,7 +141,7 @@ export interface IVideoService {
   save(id: string, buffer: Buffer, mimeType: string, subdomain?: string): Promise<string>;
   delete(path: string): Promise<void>;
   exists(path: string): boolean;
-  getPath(id: string, subdomain?: string): string;
+  getPath(relativePath: string): string;
   getMimeType(path: string): string | undefined;
 }
 

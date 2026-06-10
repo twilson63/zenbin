@@ -39,11 +39,11 @@ let carol: TestSigner;
 function signedGet(signer: TestSigner, path: string): Request {
   const timestamp = new Date().toISOString();
   const nonce = `nonce-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const pathForSigning = path.split('?')[0];
+  // Signature now covers the full request target (path + query string).
   const headers = createSignedHeaders({
     signer,
     method: 'GET',
-    path: pathForSigning,
+    path,
     body: '',
     timestamp,
     nonce,

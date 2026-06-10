@@ -31,6 +31,8 @@ const bodyHash = new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.en
 const contentDigest = 'sha-256=:' + toBase64(bodyHash) + ':';
 const timestamp = new Date().toISOString();
 const nonce = crypto.randomUUID().replace(/-/g, '');
+// `path` is the full request target: pathname + query string. Publishing has no
+// query, but signed GET listing requests must include the query string here.
 const canonical = ['POST', path, timestamp, nonce, contentDigest].join('\n');
 const signatureBytes = new Uint8Array(await crypto.subtle.sign('Ed25519', privateKey, encoder.encode(canonical)));
 

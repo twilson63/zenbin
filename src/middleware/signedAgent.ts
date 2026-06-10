@@ -54,6 +54,16 @@ function isWriteMethod(method: string): boolean {
   return method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
 }
 
+/**
+ * The signed request target: path + query string. The query string is included
+ * so a man-in-the-middle cannot alter query parameters (cursor, limit, filters,
+ * tokens) on a signed request without invalidating the signature.
+ */
+function requestTarget(c: Context): string {
+  const url = new URL(c.req.url);
+  return `${url.pathname}${url.search}`;
+}
+
 function hasAllHeaders(headers: OptionalSignedHeaders): headers is RequiredSignedHeaders {
   return Boolean(
     headers.keyId
@@ -143,9 +153,10 @@ export async function verifySignedAgent(c: Context): Promise<SignedAgentContext 
     return reject(c, 401, 'Content digest mismatch', headers.keyId, undefined, ErrorCodes.CONTENT_DIGEST_MISMATCH);
   }
 
+  const target = requestTarget(c);
   const canonical = buildCanonicalRequest({
     method: c.req.method,
-    path: c.req.path,
+    path: target,
     timestamp: headers.timestamp,
     nonce: headers.nonce,
     contentDigest: headers.contentDigest,
@@ -179,7 +190,7 @@ export async function verifySignedAgent(c: Context): Promise<SignedAgentContext 
     timestamp: headers.timestamp,
     nonce: headers.nonce,
     method: c.req.method,
-    path: c.req.path,
+    path: target,
   });
 
   return c.get('signedAgent')!;

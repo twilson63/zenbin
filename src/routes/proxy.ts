@@ -1,7 +1,24 @@
 import { Hono } from 'hono';
+import { Agent } from 'undici';
 import { config } from '../config.js';
 import { validateProxyRequest, ProxyRequest } from '../utils/validation.js';
 import { resolveAndValidate } from '../utils/ssrf.js';
+
+/**
+ * Build an undici dispatcher that pins every connection to a pre-validated IP,
+ * so the network stack cannot re-resolve the hostname to a different (e.g.
+ * rebound, private) address after our SSRF check. The Host header / SNI is
+ * still derived from the original URL by fetch().
+ */
+function pinnedDispatcher(ip: string): Agent {
+  return new Agent({
+    connect: {
+      lookup: (_hostname, _options, callback) => {
+        callback(null, [{ address: ip, family: ip.includes(':') ? 6 : 4 }]);
+      },
+    },
+  });
+}
 
 export interface ProxyResponse {
   status: number;
@@ -73,9 +90,11 @@ proxy.post('/', async (c) => {
     }
   }
 
-  // 6. SSRF validation (resolveAndValidate)
+  // 6. SSRF validation (resolveAndValidate) — capture the validated IP so the
+  // outgoing fetch connects to exactly that address (no re-resolution).
+  let pinnedIp: string;
   try {
-    await resolveAndValidate(proxyReq.url);
+    ({ ip: pinnedIp } = await resolveAndValidate(proxyReq.url));
   } catch (err) {
     const message = err instanceof Error ? err.message : 'SSRF validation failed';
     return c.json({ error: message }, 400);
@@ -126,11 +145,13 @@ proxy.post('/', async (c) => {
 
   try {
     while (redirectCount <= maxRedirects) {
-      const fetchOptions: RequestInit = {
+      const fetchOptions: RequestInit & { dispatcher?: Agent } = {
         method: redirectCount === 0 ? method : 'GET', // Follow redirects with GET
         headers: outgoingHeaders,
         signal: controller.signal,
         redirect: 'manual',
+        // Pin the connection to the validated IP for the current URL.
+        dispatcher: pinnedDispatcher(pinnedIp),
       };
 
       // Only include body on first request and if method supports it
@@ -150,9 +171,9 @@ proxy.post('/', async (c) => {
         // Resolve relative URLs
         const redirectUrl = new URL(location, currentUrl).toString();
 
-        // Validate redirect target for SSRF
+        // Validate redirect target for SSRF and re-pin to its validated IP.
         try {
-          await resolveAndValidate(redirectUrl);
+          ({ ip: pinnedIp } = await resolveAndValidate(redirectUrl));
         } catch (err) {
           clearTimeout(timeoutId);
           const message = err instanceof Error ? err.message : 'SSRF validation failed on redirect';

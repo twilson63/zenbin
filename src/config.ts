@@ -16,6 +16,13 @@ export const config = {
   get maxPayloadSize() { return parseInt(process.env.MAX_PAYLOAD_SIZE || '2097152', 10); },
   get maxImageSize() { return parseInt(process.env.MAX_IMAGE_SIZE || '5242880', 10); },
   get maxIdLength() { return parseInt(process.env.MAX_ID_LENGTH || '128', 10); },
+  // Hard transport-level cap on request body size (bytes). Generous enough for a
+  // base64-encoded max-size video upload (~50MB → ~67MB) plus JSON overhead;
+  // per-route validation still enforces the real per-field limits.
+  get maxRequestBodyBytes() { return parseInt(process.env.MAX_REQUEST_BODY_BYTES || '78643200', 10); },
+
+  // Trust X-Forwarded-For / X-Real-IP headers only when behind a trusted proxy.
+  get trustProxy() { return process.env.TRUST_PROXY === 'true'; },
 
   // Media settings
   allowedImageTypes: [

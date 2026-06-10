@@ -2,6 +2,7 @@
 // Verifies API keys from the ZenBin Portal
 
 import { Context, Next } from 'hono';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 
@@ -46,7 +47,7 @@ export async function verifyApiKey(c: Context, next: Next) {
   }
 
   try {
-    const decoded = jwt.verify(token, ZENBIN_JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, ZENBIN_JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload;
     
     // Attach user info to context
     c.set('user', { ...decoded, plan: decoded.plan });
@@ -91,8 +92,25 @@ async function handleFreeTier(c: Context, next: Next) {
 }
 
 function getClientId(c: Context): string {
-  // Use IP + user agent as client identifier for free tier
-  const ip = c.req.header('X-Forwarded-For') || c.req.header('X-Real-IP') || 'unknown';
+  // Derive the client IP from the real socket unless explicitly behind a
+  // trusted proxy. Client-supplied X-Forwarded-For is spoofable and would let
+  // a caller reset the free-tier counter by rotating the header.
+  let ip = 'unknown';
+  if (config.trustProxy) {
+    const forwarded = c.req.header('X-Forwarded-For');
+    if (forwarded) {
+      const parts = forwarded.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 0) ip = parts[parts.length - 1];
+    } else {
+      ip = c.req.header('X-Real-IP') || 'unknown';
+    }
+  } else {
+    try {
+      ip = getConnInfo(c).remote.address || 'unknown';
+    } catch {
+      ip = 'unknown';
+    }
+  }
   const ua = c.req.header('User-Agent') || 'unknown';
   return `${ip}:${ua.slice(0, 50)}`;
 }

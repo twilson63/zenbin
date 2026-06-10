@@ -64,19 +64,27 @@ subdomains.post('/:name', async (c) => {
     return errorResponse(ErrorCodes.SUBDOMAIN_TAKEN, `Subdomain '${name}' is already taken`, 409);
   }
 
-  // ─── Plan limit check ────────────────────────────────────
-  let agentKey = keyId ? await services.keys.checkAndResetCycle(keyId) : undefined;
-  const subdomainLimit = services.subdomains.checkClaimLimit(keyId || '');
-  if (!subdomainLimit.allowed) {
-    const plan = agentKey ? (agentKey.plan || 'free') : 'free';
+  // ─── Atomic plan-limit check + claim ─────────────────────
+  // The ownership-cap check and the claim write happen in one transaction so
+  // concurrent claims cannot both pass, and the cap is enforced against the
+  // number of subdomains actually owned (not a resettable monthly counter).
+  const agentKey = keyId ? await services.keys.checkAndResetCycle(keyId) : undefined;
+  const plan = agentKey ? (agentKey.plan || 'free') : 'free';
+  const claim = services.subdomains.reserveAndClaim(name, keyId, plan);
+  if (!claim.allowed) {
     return c.json({
-      error: subdomainLimit.reason,
+      error: claim.reason,
       plan,
       upgradeUrl: `${config.baseUrl}/v1/billing/checkout?plan=pro`,
     }, 402);
   }
+  if (!claim.created || !claim.subdomain) {
+    // Lost the race: the name was claimed between our check and the reserve.
+    return errorResponse(ErrorCodes.SUBDOMAIN_TAKEN, `Subdomain '${name}' is already taken`, 409);
+  }
 
-  const { subdomain, created } = await services.subdomains.save(name, keyId);
+  const subdomain = claim.subdomain;
+  const created = claim.created;
   const baseUrl = config.baseUrl.replace(/^https?:\/\//, '');
   const protocol = config.baseUrl.startsWith('https') ? 'https' : 'http';
 
