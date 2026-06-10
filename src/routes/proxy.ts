@@ -11,10 +11,19 @@ import { resolveAndValidate } from '../utils/ssrf.js';
  * still derived from the original URL by fetch().
  */
 function pinnedDispatcher(ip: string): Agent {
+  const family = ip.includes(':') ? 6 : 4;
   return new Agent({
     connect: {
-      lookup: (_hostname, _options, callback) => {
-        callback(null, [{ address: ip, family: ip.includes(':') ? 6 : 4 }]);
+      // undici may invoke lookup in either the `all` form (expects an array of
+      // { address, family }) or the legacy form (expects address + family
+      // positional args), depending on version. Handle both so the pinned IP
+      // is honored regardless.
+      lookup: (_hostname: string, options: any, callback: any) => {
+        if (options && options.all) {
+          callback(null, [{ address: ip, family }]);
+        } else {
+          callback(null, ip, family);
+        }
       },
     },
   });
@@ -211,7 +220,12 @@ proxy.post('/', async (c) => {
     if (err instanceof Error && err.name === 'AbortError') {
       return c.json({ error: 'Request timed out' }, 504);
     }
-    const message = err instanceof Error ? err.message : 'Failed to fetch target URL';
+    const baseMessage = err instanceof Error ? err.message : 'Failed to fetch target URL';
+    // Surface the underlying cause (e.g. ECONNREFUSED, ENOTFOUND) — "fetch
+    // failed" alone is undiagnosable.
+    const cause = (err as { cause?: { code?: string; message?: string } } | undefined)?.cause;
+    const detail = cause?.code || cause?.message;
+    const message = detail ? `${baseMessage} (${detail})` : baseMessage;
     return c.json({ error: message }, 502);
   }
 
