@@ -82,6 +82,11 @@ function isPrivateIPv6(ip: string): boolean {
     return true;
   }
 
+  // :: (unspecified) — routes to localhost on most stacks
+  if (normalized === '0000:0000:0000:0000:0000:0000:0000:0000') {
+    return true;
+  }
+
   // Check for IPv4-mapped addresses in normalized form (::ffff:7f00:1 = 127.0.0.1)
   if (normalized.startsWith('0000:0000:0000:0000:0000:ffff:')) {
     const lastTwoSegments = normalized.slice(-9); // "7f00:0001"
@@ -165,39 +170,42 @@ export async function resolveAndValidate(urlString: string): Promise<{ hostname:
   const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
   const ipv6Regex = /^\[?([a-fA-F0-9:]+)\]?$/;
 
-  let ip: string;
+  let ips: string[];
 
   if (ipv4Regex.test(hostname)) {
-    ip = hostname;
+    ips = [hostname];
   } else if (ipv6Regex.test(hostname)) {
     // Remove brackets if present
-    ip = hostname.replace(/^\[|\]$/g, '');
+    ips = [hostname.replace(/^\[|\]$/g, '')];
   } else {
-    // Resolve DNS
+    // Resolve DNS — collect both A and AAAA records so we can validate every
+    // address the OS resolver might connect to.
+    const resolved: string[] = [];
     try {
-      const addresses = await dns.resolve4(hostname);
-      if (addresses.length === 0) {
-        throw new Error('No DNS records found');
-      }
-      ip = addresses[0];
-    } catch (err) {
-      // Try IPv6 if IPv4 fails
-      try {
-        const addresses = await dns.resolve6(hostname);
-        if (addresses.length === 0) {
-          throw new Error('No DNS records found');
-        }
-        ip = addresses[0];
-      } catch {
-        throw new Error('DNS resolution failed');
-      }
+      resolved.push(...await dns.resolve4(hostname));
+    } catch {
+      // no A records
+    }
+    try {
+      resolved.push(...await dns.resolve6(hostname));
+    } catch {
+      // no AAAA records
+    }
+    if (resolved.length === 0) {
+      throw new Error('DNS resolution failed');
+    }
+    ips = resolved;
+  }
+
+  // Validate EVERY resolved IP — reject if any is private/internal. This closes
+  // the multi-record bypass where only the first address was checked.
+  for (const candidate of ips) {
+    if (isPrivateIP(candidate)) {
+      throw new Error('URL resolves to a private/internal IP address');
     }
   }
 
-  // Validate the resolved IP
-  if (isPrivateIP(ip)) {
-    throw new Error('URL resolves to a private/internal IP address');
-  }
-
-  return { hostname, ip };
+  // Return the validated address so callers can pin the connection to it and
+  // avoid a second, unchecked DNS resolution (DNS-rebinding / TOCTOU).
+  return { hostname, ip: ips[0] };
 }

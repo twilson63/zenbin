@@ -19,9 +19,12 @@ import {
   incrementAgentKeyUsage,
   decrementSubdomainPageCount as dbDecrementSubdomainPageCount,
   incrementSubdomainPageCount as dbIncrementSubdomainPageCount,
+  reservePageQuota as dbReservePageQuota,
+  releasePageQuota as dbReleasePageQuota,
   getAgentKey,
 } from '../storage/db.js';
 import type { PageSummary } from '../storage/db.js';
+import type { Plan } from '../types.js';
 import { deleteVideo, saveVideo } from '../storage/video.js';
 import { checkPageLimit, getPlanFromKey, isBillingCycleExpired } from '../rules.js';
 import { config } from '../config.js';
@@ -116,6 +119,19 @@ export class PageService implements IPageService {
    */
   trackPageCreation(keyId: string): void {
     incrementAgentKeyUsage(keyId, 'monthlyPageCount');
+  }
+
+  /**
+   * Atomically check + reserve a page-quota slot for a new page.
+   * Returns { allowed:false, reason } when the plan limit is reached.
+   */
+  reservePageQuota(keyId: string): { allowed: boolean; reason?: string; plan: Plan } {
+    return dbReservePageQuota(keyId, config.freeTier.monthlyWindowMs);
+  }
+
+  /** Release a reserved page-quota slot (publish failed / no-op). */
+  releasePageQuota(keyId: string): void {
+    dbReleasePageQuota(keyId);
   }
 
   /**

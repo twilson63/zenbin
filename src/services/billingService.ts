@@ -40,6 +40,12 @@ export class BillingService implements IBillingService {
       throw new Error(`Agent key '${keyId}' not found.`);
     }
 
+    // Prevent duplicate subscriptions / double billing. Plan changes must go
+    // through the billing portal, not a fresh checkout.
+    if (agentKey.subscriptionId) {
+      throw new Error('Key already has an active subscription. Use the billing portal to change plans.');
+    }
+
     const priceId = getPriceId(plan);
     if (!priceId) {
       throw new Error(`Invalid plan '${plan}' or price ID not configured.`);
@@ -122,23 +128,26 @@ export class BillingService implements IBillingService {
         const subscriptionId = session.subscription;
 
         if (keyId && plan) {
-          await updateAgentKeyPlan(keyId, plan, customerId, subscriptionId);
-          await resetAgentKeyUsage(keyId);
+          const existing = getAgentKey(keyId);
+          // Idempotent: only apply + reset usage on a real transition, so a
+          // redelivered webhook cannot re-zero accrued mid-cycle usage.
+          if (!existing || existing.subscriptionId !== subscriptionId || existing.plan !== plan) {
+            await updateAgentKeyPlan(keyId, plan, customerId, subscriptionId);
+            await resetAgentKeyUsage(keyId);
+          }
         }
         break;
       }
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object;
-        const customerId = typeof subscription.customer === 'string'
-          ? subscription.customer
-          : subscription.customer?.id;
         const subscriptionId = subscription.id;
 
-        const agentKey = listAgentKeys().find((key) => (
-          (subscriptionId && key.subscriptionId === subscriptionId)
-          || (customerId && key.stripeCustomerId === customerId)
-        ));
+        // Match strictly on the recorded subscription id — cancelling an old
+        // subscription must not downgrade a key that has an active replacement.
+        const agentKey = subscriptionId
+          ? listAgentKeys().find((key) => key.subscriptionId === subscriptionId)
+          : undefined;
 
         if (agentKey) {
           await updateAgentKeyPlan(agentKey.keyId, 'free', agentKey.stripeCustomerId, '');

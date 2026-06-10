@@ -17,6 +17,16 @@ type Variables = {
   subdomain: string;
 };
 
+/** Escape text for safe interpolation into HTML element/attribute content. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const subdomainRender = new Hono<{ Variables: Variables }>();
 
 subdomainRender.use('*', async (c, next) => {
@@ -105,8 +115,23 @@ const SECURITY_HEADERS = {
   'X-Frame-Options': 'DENY',
 };
 
+/**
+ * Return an HTML error/placeholder page with the sandbox security headers
+ * applied (including CSP). These pages reflect request-derived values, so they
+ * must carry the same CSP as rendered pages.
+ */
+function htmlErrorResponse(c: Context, html: string, status: number = 200) {
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    c.header(key, value);
+  }
+  c.header('Content-Type', 'text/html; charset=utf-8');
+  return c.body(html, status as 200);
+}
+
 // Placeholder HTML for new/empty subdomains
-const getPlaceholderPage = (subdomain: string): string => `<!DOCTYPE html>
+const getPlaceholderPage = (rawSubdomain: string): string => {
+  const subdomain = escapeHtml(rawSubdomain);
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -164,9 +189,13 @@ const getPlaceholderPage = (subdomain: string): string => `<!DOCTYPE html>
   </div>
 </body>
 </html>`;
+};
 
 // 404 page for subdomains
-const getNotFoundPage = (subdomain: string, path: string): string => `<!DOCTYPE html>
+const getNotFoundPage = (rawSubdomain: string, rawPath: string): string => {
+  const subdomain = escapeHtml(rawSubdomain);
+  const path = escapeHtml(rawPath);
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -223,9 +252,12 @@ const getNotFoundPage = (subdomain: string, path: string): string => `<!DOCTYPE 
   </div>
 </body>
 </html>`;
+};
 
 // Non-existent subdomain page
-const getNonExistentSubdomainPage = (subdomain: string): string => `<!DOCTYPE html>
+const getNonExistentSubdomainPage = (rawSubdomain: string): string => {
+  const subdomain = escapeHtml(rawSubdomain);
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -283,6 +315,7 @@ const getNonExistentSubdomainPage = (subdomain: string): string => `<!DOCTYPE ht
   </div>
 </body>
 </html>`;
+};
 
 /**
  * Verify page authentication
@@ -349,24 +382,23 @@ async function verifyPageAuth(c: Context, page: Page): Promise<Response | null> 
 
 // Middleware to extract subdomain from host header
 const extractSubdomain = async (c: Context, next: Next) => {
-  const host = c.req.header('host') || '';
-  
-  // Check if this is a subdomain request
-  // host format: subdomain.zenbin.io or just zenbin.io
-  const parts = host.split('.');
-  
-  if (parts.length >= 3) {
-    // This looks like a subdomain request: something.zenbin.io
-    const potentialSubdomain = parts[0].toLowerCase();
-    
-    // Check if it's a reserved name (should route to main site)
-    const reserved = new Set(config.subdomains.reservedNames);
-    if (!reserved.has(potentialSubdomain) && potentialSubdomain !== 'www') {
-      // This is a real subdomain request
-      c.set('subdomain', potentialSubdomain);
+  // Require the host to actually be under our base domain before treating the
+  // leading label as a subdomain (avoids Host-header confusion / domain fronting).
+  const host = (c.req.header('host') || '').split(':')[0].toLowerCase();
+  const baseDomain = config.subdomains.baseDomain.toLowerCase();
+  const suffix = `.${baseDomain}`;
+
+  if (host.endsWith(suffix)) {
+    const labels = host.slice(0, -suffix.length).split('.');
+    if (labels.length === 1 && labels[0]) {
+      const potentialSubdomain = labels[0];
+      const reserved = new Set(config.subdomains.reservedNames);
+      if (!reserved.has(potentialSubdomain) && potentialSubdomain !== 'www') {
+        c.set('subdomain', potentialSubdomain);
+      }
     }
   }
-  
+
   await next();
 };
 
@@ -397,7 +429,7 @@ subdomainRender.get('/*', async (c) => {
   const subdomainObj = getSubdomain(subdomain);
   if (!subdomainObj) {
     c.header('Content-Type', 'text/html; charset=utf-8');
-    return c.body(getNonExistentSubdomainPage(subdomain), 404);
+    return htmlErrorResponse(c, getNonExistentSubdomainPage(subdomain), 404);
   }
   
   // Get the path and detect explicit asset/source suffixes before normal page rendering.
@@ -417,7 +449,7 @@ subdomainRender.get('/*', async (c) => {
   const idError = validateId(pageId);
   if (idError) {
     c.header('Content-Type', 'text/html; charset=utf-8');
-    return c.body(getNotFoundPage(subdomain, path), 404);
+    return htmlErrorResponse(c, getNotFoundPage(subdomain, path), 404);
   }
   
   // Get the page
@@ -428,12 +460,12 @@ subdomainRender.get('/*', async (c) => {
     // Special case: if requesting root and no index page, show placeholder
     if (pageId === 'index') {
       c.header('Content-Type', 'text/html; charset=utf-8');
-      return c.body(getPlaceholderPage(subdomain));
+      return htmlErrorResponse(c, getPlaceholderPage(subdomain));
     }
     
     // Otherwise, show 404
     c.header('Content-Type', 'text/html; charset=utf-8');
-    return c.body(getNotFoundPage(subdomain, path), 404);
+    return htmlErrorResponse(c, getNotFoundPage(subdomain, path), 404);
   }
   
   // Check authentication
@@ -717,7 +749,7 @@ export async function serveSubdomainPage(c: any, subdomain: string, path: string
   const subdomainObj = getSubdomain(subdomain);
   if (!subdomainObj) {
     c.header('Content-Type', 'text/html; charset=utf-8');
-    return c.body(getNonExistentSubdomainPage(subdomain), 404);
+    return htmlErrorResponse(c, getNonExistentSubdomainPage(subdomain), 404);
   }
   
   // Detect explicit asset/source suffixes before normal page rendering.
@@ -737,7 +769,7 @@ export async function serveSubdomainPage(c: any, subdomain: string, path: string
   const idError = validateId(pageId);
   if (idError) {
     c.header('Content-Type', 'text/html; charset=utf-8');
-    return c.body(getNotFoundPage(subdomain, path), 404);
+    return htmlErrorResponse(c, getNotFoundPage(subdomain, path), 404);
   }
   
   // Get the page
@@ -748,12 +780,12 @@ export async function serveSubdomainPage(c: any, subdomain: string, path: string
     // Special case: if requesting root and no index page, show placeholder
     if (pageId === 'index') {
       c.header('Content-Type', 'text/html; charset=utf-8');
-      return c.body(getPlaceholderPage(subdomain));
+      return htmlErrorResponse(c, getPlaceholderPage(subdomain));
     }
     
     // Otherwise, show 404
     c.header('Content-Type', 'text/html; charset=utf-8');
-    return c.body(getNotFoundPage(subdomain, path), 404);
+    return htmlErrorResponse(c, getNotFoundPage(subdomain, path), 404);
   }
   
   // Check authentication

@@ -104,6 +104,11 @@ sha-256=:BASE64_DIGEST:
 
 Fields in order: method, path, timestamp, nonce, content-digest — joined by newlines.
 
+The \`path\` is the full request target — pathname **plus query string**. For
+publishing (\`POST /v1/pages/...\`) there is no query, so it is just the pathname.
+For signed GET listing endpoints, include the query string exactly as sent
+(e.g. \`/v1/pages?cursor=abc&limit=20\`), or the signature will not verify.
+
 ### Sign the canonical string
 
 \`\`\`js

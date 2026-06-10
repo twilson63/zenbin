@@ -2,9 +2,10 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { bodyLimit } from 'hono/body-limit';
 import dotenv from 'dotenv';
 import { config } from './config.js';
-import { initDatabase, closeDatabase, backfillOwnerIndex, backfillRecipientIndex, backfillKeyFingerprints, backfillAttestationIndexes } from './storage/db.js';
+import { initDatabase, closeDatabase, backfillOwnerIndex, backfillRecipientIndex, backfillKeyFingerprints, backfillAttestationIndexes, cleanupExpiredNonces } from './storage/db.js';
 import { initVideoStorage } from './storage/video.js';
 import { createServices, type Services } from './services/container.js';
 import { pages } from './routes/pages.js';
@@ -39,6 +40,12 @@ const services = createServices();
 // Middleware
 app.use('*', logger());
 app.use('*', cors());
+// Hard transport-level body cap: reject oversized payloads before any handler
+// buffers the full body (e.g. signed-agent digest verification reads it whole).
+app.use('*', bodyLimit({
+  maxSize: config.maxRequestBodyBytes,
+  onError: (c) => c.json({ error: 'Request body too large' }, 413),
+}));
 app.use('*', rateLimit);
 
 // Inject services into request context
@@ -49,19 +56,26 @@ app.use('*', async (c, next) => {
 
 // Subdomain detection middleware
 app.use('*', async (c, next) => {
-  const host = c.req.header('host') || '';
-  const baseDomain = config.subdomains.baseDomain;
-  
-  // Check if this is a subdomain request
-  const parts = host.split('.');
-  if (parts.length >= 3) {
-    const potentialSubdomain = parts[0].toLowerCase();
-    const reserved = new Set(config.subdomains.reservedNames);
-    if (!reserved.has(potentialSubdomain) && potentialSubdomain !== 'www') {
-      c.set('subdomain', potentialSubdomain);
+  // Strip any port, then require the host to actually be under our base domain
+  // before treating the first label as a subdomain. Without this, any host with
+  // ≥3 labels (e.g. a spoofed Host header or foo.attacker.com pointed here) is
+  // routed as a subdomain.
+  const host = (c.req.header('host') || '').split(':')[0].toLowerCase();
+  const baseDomain = config.subdomains.baseDomain.toLowerCase();
+  const suffix = `.${baseDomain}`;
+
+  if (host.endsWith(suffix)) {
+    const labels = host.slice(0, -suffix.length).split('.');
+    // Exactly one label in front of the base domain → a subdomain.
+    if (labels.length === 1 && labels[0]) {
+      const potentialSubdomain = labels[0];
+      const reserved = new Set(config.subdomains.reservedNames);
+      if (!reserved.has(potentialSubdomain) && potentialSubdomain !== 'www') {
+        c.set('subdomain', potentialSubdomain);
+      }
     }
   }
-  
+
   await next();
 });
 
@@ -239,6 +253,18 @@ async function main() {
 
     console.log('Initializing analytics...');
     initAnalytics();
+
+    // Periodically sweep expired nonces so the nonce store does not grow
+    // without bound (honest clients never re-present a nonce, so the inline
+    // cleanup never fires for them).
+    const nonceSweep = setInterval(() => {
+      try {
+        cleanupExpiredNonces();
+      } catch (err) {
+        console.error('Nonce sweep failed:', err);
+      }
+    }, 10 * 60 * 1000);
+    nonceSweep.unref();
 
     // Security warnings for missing secrets
     if (!process.env.ZENBIN_JWT_SECRET) {

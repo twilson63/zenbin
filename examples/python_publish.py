@@ -27,6 +27,8 @@ body = json.dumps(body_obj, separators=(',', ':'))
 timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 nonce = uuid.uuid4().hex
 content_digest = 'sha-256=:' + base64.b64encode(hashlib.sha256(body.encode()).digest()).decode() + ':'
+# `path` is the full request target: pathname + query string. Publishing has no
+# query, but signed GET listing requests must include the query string here.
 canonical = '\n'.join(['POST', path, timestamp, nonce, content_digest])
 signature = base64.urlsafe_b64encode(private_key.sign(canonical.encode())).decode().rstrip('=')
 

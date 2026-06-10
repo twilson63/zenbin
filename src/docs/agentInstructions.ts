@@ -341,6 +341,10 @@ GET /v1/pages
 
 Requires a signed request. Returns all pages owned by the authenticated key, with cursor-based pagination.
 
+> **Signing note:** the canonical \`path\` you sign must include the query string
+> exactly as sent (e.g. \`/v1/pages?recipient=me&limit=20\`). The server signs
+> path + query, so omitting the query will fail signature verification.
+
 **Query parameters:**
 
 | Parameter | Type | Default | Max | Description |

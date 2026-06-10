@@ -392,14 +392,18 @@ render.get('/:id/raw', async (c) => {
     return authResponse;
   }
 
+  // Distinct ETag for the raw representation so a shared cache can't return a
+  // 304 with raw bytes for an If-None-Match captured from the rendered HTML
+  // view (which carries injected provenance/analytics and a different type).
+  const rawEtag = generateEtag(`${page.etag}:raw`);
   const ifNoneMatch = c.req.header('If-None-Match');
-  if (etagMatches(ifNoneMatch, page.etag)) {
+  if (etagMatches(ifNoneMatch, rawEtag)) {
     return c.body(null, 304);
   }
 
   c.header('Content-Type', 'text/plain; charset=utf-8');
   c.header('Content-Disposition', `inline; filename="${id}.html"`);
-  c.header('ETag', page.etag);
+  c.header('ETag', rawEtag);
   c.header('Cache-Control', 'public, max-age=0, must-revalidate');
   trackRequestView(c, id);
   return c.body(page.html);

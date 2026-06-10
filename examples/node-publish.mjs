@@ -21,6 +21,8 @@ const body = JSON.stringify({
 const timestamp = new Date().toISOString();
 const nonce = crypto.randomUUID().replace(/-/g, '');
 const contentDigest = 'sha-256=:' + createHash('sha256').update(body).digest('base64') + ':';
+// `path` is the full request target: pathname + query string. Publishing has no
+// query, but signed GET listing requests must include the query string here.
 const canonical = ['POST', path, timestamp, nonce, contentDigest].join('\n');
 const signature = signBytes(null, Buffer.from(canonical), privateKey)
   .toString('base64')

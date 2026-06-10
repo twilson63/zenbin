@@ -65,21 +65,20 @@ describe('SubdomainService', () => {
   });
 
   describe('checkClaimLimit', () => {
-    it('should allow claim for free plan under limit', () => {
-      const result = subdomainService.checkClaimLimit(freeSigner.keyId);
-      // Free plan allows 1 subdomain; we already created one, but count is monthlySubdomainCount
-      // which starts at 0, so this should be allowed
+    it('should allow claim for free plan under limit', async () => {
+      // The cap is enforced against subdomains actually OWNED by the key.
+      // A fresh key owns none, so it is under the free limit of 1.
+      const freshSigner = await createTestSigner(`sub-svc-fresh-${Date.now()}`);
+      const result = subdomainService.checkClaimLimit(freshSigner.keyId);
       expect(result.allowed).toBe(true);
     });
 
-    it('should block claim for free plan over limit', async () => {
-      // Increment usage via the key service to reach the limit
-      await services_keys.incrementUsage(freeSigner.keyId, 'monthlySubdomainCount');
+    it('should block claim for free plan over limit', () => {
+      // freeSigner already owns 'mysite' (created above), reaching the free
+      // ownership cap of 1 — a further claim must be rejected.
       const result = subdomainService.checkClaimLimit(freeSigner.keyId);
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('Free tier');
-      // Reset
-      await services_keys.resetUsage(freeSigner.keyId);
     });
 
     it('should always allow pro plan claims', () => {

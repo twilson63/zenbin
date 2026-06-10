@@ -11,12 +11,14 @@ import {
   getSubdomainCount as dbGetSubdomainCount,
   incrementSubdomainPageCount as dbIncrementSubdomainPageCount,
   decrementSubdomainPageCount as dbDecrementSubdomainPageCount,
+  reserveAndClaimSubdomain as dbReserveAndClaimSubdomain,
+  countSubdomainsByOwner as dbCountSubdomainsByOwner,
   incrementAgentKeyUsage,
   getAgentKey,
 } from '../storage/db.js';
 import { config } from '../config.js';
 import { checkSubdomainLimit, getPlanFromKey } from '../rules.js';
-import type { Subdomain, SubdomainResult, LimitCheckResult } from '../types.js';
+import type { Subdomain, SubdomainResult, LimitCheckResult, Plan } from '../types.js';
 import type { ISubdomainService } from './interfaces.js';
 
 export class SubdomainService implements ISubdomainService {
@@ -48,11 +50,26 @@ export class SubdomainService implements ISubdomainService {
 
   /**
    * Check if a subdomain claim is allowed under the current plan.
+   * Enforced against the number of subdomains the key actually OWNS (a stable
+   * ownership cap), not a monthly counter that resets every billing cycle.
    */
   checkClaimLimit(keyId: string): LimitCheckResult {
     const agentKey = getAgentKey(keyId);
     const plan = agentKey ? getPlanFromKey(agentKey) : 'free';
-    return checkSubdomainLimit(plan, agentKey?.monthlySubdomainCount || 0);
+    return checkSubdomainLimit(plan, keyId ? dbCountSubdomainsByOwner(keyId) : 0);
+  }
+
+  /**
+   * Atomically enforce the ownership cap and claim the subdomain in one
+   * transaction (closes the concurrent-claim race). created=false means the
+   * name already existed.
+   */
+  reserveAndClaim(
+    name: string,
+    ownerKeyId: string | undefined,
+    plan: Plan,
+  ): { allowed: boolean; reason?: string; created: boolean; subdomain?: Subdomain } {
+    return dbReserveAndClaimSubdomain(name, ownerKeyId, plan);
   }
 
   /**

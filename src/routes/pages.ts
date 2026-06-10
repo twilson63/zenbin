@@ -381,6 +381,23 @@ pages.post('/:id', async (c) => {
     }
   }
 
+  // Atomically reserve a quota slot for a brand-new page. This closes the race
+  // between the read-only plan check above and the usage increment: the check,
+  // cycle reset, and increment all happen in one transaction.
+  let reservedQuota = false;
+  if (!existingPage) {
+    const reservation = services.pages.reservePageQuota(keyId);
+    if (!reservation.allowed) {
+      if (videoPath) await services.pages.deleteVideoFile(videoPath);
+      return c.json({
+        error: reservation.reason,
+        plan: reservation.plan,
+        upgradeUrl: `${config.baseUrl}/v1/billing/checkout?plan=pro`,
+      }, 402);
+    }
+    reservedQuota = true;
+  }
+
   const { page, created } = await services.pages.save(
     id,
     {
@@ -413,9 +430,10 @@ pages.post('/:id', async (c) => {
     services.pages.incrementSubdomainPageCount(subdomain);
   }
 
-  // Track usage for billing
-  if (created) {
-    services.pages.trackPageCreation(keyId);
+  // Usage was already reserved atomically above. If the page turned out to
+  // already exist (concurrent create), release the slot we reserved.
+  if (reservedQuota && !created) {
+    services.pages.releasePageQuota(keyId);
   }
 
   const baseUrl = config.baseUrl;

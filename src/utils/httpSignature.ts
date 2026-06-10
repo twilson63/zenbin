@@ -10,6 +10,12 @@ export interface SignatureHeaders {
   signature: string;
 }
 
+/**
+ * Build the canonical string that gets signed.
+ * `path` MUST be the full request target — pathname plus query string (e.g.
+ * "/v1/pages?cursor=abc&limit=20") — so query parameters are covered by the
+ * signature. For query-less requests this is just the pathname.
+ */
 export function buildCanonicalRequest(input: {
   method: string;
   path: string;

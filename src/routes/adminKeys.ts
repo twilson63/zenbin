@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { ErrorCodes, errorResponse } from '../errors.js';
 import { requireAdmin } from '../middleware/adminAuth.js';
+import { validateEd25519PublicJwk } from '../utils/httpSignature.js';
+import { computeFingerprint } from '../utils/fingerprint.js';
 import type { Services } from '../services/container.js';
 
 const adminKeys = new Hono();
@@ -42,15 +44,34 @@ adminKeys.post('/', async (c) => {
     return errorResponse(ErrorCodes.INVALID_REQUEST, 'publicJwk is required', 400);
   }
 
+  const trimmedKeyId = body.keyId.trim();
+  if (!trimmedKeyId) {
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'keyId is required', 400);
+  }
+  if (trimmedKeyId.length > 128) {
+    return errorResponse(ErrorCodes.PAGE_INVALID_ID, 'keyId must be 128 characters or less', 400);
+  }
+  if (!/^[A-Za-z0-9._:-]+$/.test(trimmedKeyId)) {
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'keyId may only contain letters, numbers, dots, underscores, colons, and hyphens', 400);
+  }
+
+  // Validate the JWK the same way self-service registration does, so an
+  // admin-registered key has a usable key and a fingerprint (required to
+  // receive directed pages and to verify signatures).
+  if (!validateEd25519PublicJwk(body.publicJwk)) {
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'publicJwk must be a valid Ed25519 public JWK', 400);
+  }
+
   const services = getServices(c);
-  const existing = services.keys.get(body.keyId);
+  const existing = services.keys.get(trimmedKeyId);
   if (existing) {
-    return errorResponse(ErrorCodes.KEY_ALREADY_EXISTS, `Signing key '${body.keyId}' already exists`, 409);
+    return errorResponse(ErrorCodes.KEY_ALREADY_EXISTS, `Signing key '${trimmedKeyId}' already exists`, 409);
   }
 
   const key = await services.keys.save({
-    keyId: body.keyId,
+    keyId: trimmedKeyId,
     publicJwk: body.publicJwk as Record<string, string | boolean | undefined>,
+    publicKeyFingerprint: computeFingerprint(body.publicJwk as { x: string }),
     scopes: body.scopes || [],
     status: (body.status as 'active' | 'blocked' | 'revoked') || 'active',
   });

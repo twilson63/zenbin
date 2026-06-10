@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import { open, Database } from 'lmdb';
 import { config } from '../config.js';
+import { deleteVideo } from './video.js';
+import { PLAN_LIMITS, isBillingCycleExpired } from '../rules.js';
 import type {
   Page,
   PageAuth,
@@ -465,6 +467,8 @@ export function listPagesBySubdomainPaginated(
 
   // Cursor is the last page ID (within this subdomain) from the previous page
   const startAfterKey = cursor ? `${subdomain}:${cursor}` : undefined;
+  // Whether at least one post-cursor entry exists beyond the current page.
+  let hasMore = false;
 
   for (const key of pagesDb.getKeys({ start: prefix })) {
     if (!key.startsWith(prefix)) break;
@@ -493,11 +497,17 @@ export function listPagesBySubdomainPaginated(
           etag: page.etag,
         });
       }
+    } else {
+      // A post-cursor entry exists past this page → there is a next page.
+      hasMore = true;
     }
   }
 
+  // Only emit a cursor when there is genuinely more after the last returned
+  // page (previously `total > pages.length` was true on the final page too,
+  // since `total` counts the whole collection, causing a spurious empty fetch).
   const lastPage = pages.length > 0 ? pages[pages.length - 1] : null;
-  const nextCursor = total > pages.length && lastPage ? lastPage.id : null;
+  const nextCursor = hasMore && lastPage ? lastPage.id : null;
 
   return { pages, total, next_cursor: nextCursor };
 }
@@ -535,9 +545,21 @@ export async function deleteSubdomain(name: string): Promise<boolean> {
   const pagesDb = getDatabase();
   const prefix = `${name}:`;
   for (const key of pagesDb.getKeys({ start: prefix })) {
-    if (key.startsWith(prefix)) {
-      pagesDb.removeSync(key);
+    if (!key.startsWith(prefix)) break;
+    const page = pagesDb.get(key);
+    if (!page) continue;
+
+    // Maintain every index and clean up video files, mirroring deletePage —
+    // a raw removeSync here would leave phantom index entries and orphan videos.
+    removePageFromOwnerIndex(page);
+    removePageFromRecipientIndex(page);
+    if (page.attestation) {
+      removePageFromAttestationIndexes(page);
     }
+    if (page.video) {
+      await deleteVideo(page.video);
+    }
+    pagesDb.removeSync(key);
   }
 
   getSubdomainDatabase().removeSync(name);
@@ -675,26 +697,47 @@ export async function touchAgentKey(keyId: string): Promise<void> {
 
 export async function registerUsedNonce(keyId: string, nonce: string, expiresAt: string): Promise<boolean> {
   const nonceKey = nonceStorageKey(keyId, nonce);
-  const existing = getNonceDatabase().get(nonceKey);
-  const now = new Date();
+  const nDb = getNonceDatabase();
+  const now = Date.now();
 
-  if (existing) {
-    if (new Date(existing.expires_at).getTime() > now.getTime()) {
-      return false;
+  // Atomic insert-if-absent: the get-check-put runs inside one transaction so
+  // concurrent replays of the same captured signature cannot all succeed.
+  return nDb.transactionSync(() => {
+    const existing = nDb.get(nonceKey);
+    if (existing && new Date(existing.expires_at).getTime() > now) {
+      return false; // still-valid nonce already used → replay
     }
-    getNonceDatabase().removeSync(nonceKey);
+
+    const record: NonceRecord = {
+      id: nonceKey,
+      keyId,
+      nonce,
+      created_at: new Date(now).toISOString(),
+      expires_at: expiresAt,
+    };
+    nDb.putSync(nonceKey, record);
+    return true;
+  });
+}
+
+/**
+ * Remove expired nonce records. Without this the nonce store grows linearly
+ * with every signed request ever made (honest clients never re-present a
+ * nonce, so the inline cleanup in registerUsedNonce never fires for them).
+ * Call periodically from the server entry point.
+ */
+export function cleanupExpiredNonces(): number {
+  const nDb = getNonceDatabase();
+  const now = Date.now();
+  let removed = 0;
+  for (const key of nDb.getKeys()) {
+    const rec = nDb.get(key);
+    if (rec && new Date(rec.expires_at).getTime() <= now) {
+      nDb.removeSync(key);
+      removed++;
+    }
   }
-
-  const record: NonceRecord = {
-    id: nonceKey,
-    keyId,
-    nonce,
-    created_at: now.toISOString(),
-    expires_at: expiresAt,
-  };
-
-  getNonceDatabase().putSync(nonceKey, record);
-  return true;
+  return removed;
 }
 
 export async function saveAuditLog(record: Omit<AuditLogRecord, 'id' | 'created_at'>): Promise<AuditLogRecord> {
@@ -891,14 +934,16 @@ export function listPagesByRecipient(
 function attestationSubjectIndexKey(page: Page): string {
   const subjectId = page.attestation!.subject.id;
   const ownerKeyId = page.ownerKeyId || '';
-  return `${encodeURIComponent(subjectId)}:${ownerKeyId}`;
+  const storageKey = page.subdomain ? `${page.subdomain}:${page.id}` : page.id;
+  return `${encodeURIComponent(subjectId)}:${ownerKeyId}:${storageKey}`;
 }
 
 function attestationTypeSubjectIndexKey(page: Page): string {
   const att = page.attestation!;
   const subjectId = att.subject.id;
   const ownerKeyId = page.ownerKeyId || '';
-  return `${att.type}:${encodeURIComponent(subjectId)}:${ownerKeyId}`;
+  const storageKey = page.subdomain ? `${page.subdomain}:${page.id}` : page.id;
+  return `${att.type}:${encodeURIComponent(subjectId)}:${ownerKeyId}:${storageKey}`;
 }
 
 export function addPageToAttestationIndexes(page: Page): void {
@@ -978,7 +1023,7 @@ export function listAttestationsBySubject(
 
   const lastPage = pages.length > 0 ? pages[pages.length - 1] : null;
   const nextCursor = total > pages.length && lastPage
-    ? `${encodedSubjectId}:${lastPage.ownerKeyId}`
+    ? `${encodedSubjectId}:${lastPage.ownerKeyId}:${lastPage.subdomain ? lastPage.subdomain + ':' : ''}${lastPage.id}`
     : null;
 
   return { pages, total, next_cursor: nextCursor };
@@ -1018,7 +1063,7 @@ export function listAttestationsByTypeAndSubject(
 
   const lastPage = pages.length > 0 ? pages[pages.length - 1] : null;
   const nextCursor = total > pages.length && lastPage
-    ? `${type}:${encodedSubjectId}:${lastPage.ownerKeyId}`
+    ? `${type}:${encodedSubjectId}:${lastPage.ownerKeyId}:${lastPage.subdomain ? lastPage.subdomain + ':' : ''}${lastPage.id}`
     : null;
 
   return { pages, total, next_cursor: nextCursor };
@@ -1100,6 +1145,116 @@ export async function resetAgentKeyUsage(keyId: string): Promise<void> {
     monthlySubdomainCount: 0,
     billingCycleStart: nowIso(),
     updated_at: nowIso(),
+  });
+}
+
+/**
+ * Atomically check the page quota and reserve one slot for a NEW page.
+ * Resetting an expired billing cycle, the limit check, and the increment all
+ * happen inside one LMDB transaction so concurrent publishes cannot each pass
+ * the check before any increment lands. Call releasePageQuota on failure paths.
+ */
+export function reservePageQuota(
+  keyId: string,
+  windowMs: number,
+): { allowed: boolean; reason?: string; plan: Plan } {
+  const akDb = getAgentKeyDatabase();
+  return akDb.transactionSync(() => {
+    const existing = akDb.get(keyId);
+    // Unknown key: nothing to meter (mirrors prior free/0 fallback behaviour).
+    if (!existing) return { allowed: true, plan: 'free' as Plan };
+
+    let rec = existing;
+    if (isBillingCycleExpired(existing.billingCycleStart, windowMs)) {
+      rec = { ...existing, monthlyPageCount: 0, monthlySubdomainCount: 0, billingCycleStart: nowIso() };
+    }
+    const plan: Plan = rec.plan || 'free';
+    const limit = PLAN_LIMITS[plan].pagesPerMonth;
+    const count = rec.monthlyPageCount || 0;
+    if (count >= limit) {
+      // Persist the cycle reset even when rejecting, so the window advances.
+      if (rec !== existing) akDb.putSync(keyId, { ...rec, updated_at: nowIso() });
+      return {
+        allowed: false,
+        reason: `Free tier limit of ${limit} pages per month exceeded. Upgrade to Pro for unlimited pages.`,
+        plan,
+      };
+    }
+    akDb.putSync(keyId, { ...rec, monthlyPageCount: count + 1, updated_at: nowIso() });
+    return { allowed: true, plan };
+  });
+}
+
+/** Release a previously reserved page slot (e.g. the publish failed). */
+export function releasePageQuota(keyId: string): void {
+  const akDb = getAgentKeyDatabase();
+  akDb.transactionSync(() => {
+    const existing = akDb.get(keyId);
+    if (!existing) return;
+    const count = existing.monthlyPageCount || 0;
+    if (count <= 0) return;
+    akDb.putSync(keyId, { ...existing, monthlyPageCount: count - 1, updated_at: nowIso() });
+  });
+}
+
+/** Count subdomains actually owned by a key (used for the ownership cap). */
+export function countSubdomainsByOwner(ownerKeyId: string): number {
+  const sdDb = getSubdomainDatabase();
+  let owned = 0;
+  for (const key of sdDb.getKeys()) {
+    const s = sdDb.get(key);
+    if (s?.ownerKeyId === ownerKeyId) owned++;
+  }
+  return owned;
+}
+
+/**
+ * Atomically enforce the subdomain ownership cap and claim the name in one
+ * transaction. The cap is checked against the number of subdomains the key
+ * actually owns (not a monthly counter that resets), and the claim is written
+ * inside the same transaction so two concurrent claims cannot both pass.
+ */
+export function reserveAndClaimSubdomain(
+  name: string,
+  ownerKeyId: string | undefined,
+  plan: Plan,
+): { allowed: boolean; reason?: string; created: boolean; subdomain?: Subdomain } {
+  const sdDb = getSubdomainDatabase();
+  return sdDb.transactionSync(() => {
+    const existing = sdDb.get(name);
+    if (existing) {
+      return { allowed: true, created: false, subdomain: existing };
+    }
+
+    const limit = PLAN_LIMITS[plan].subdomains;
+    if (limit !== Infinity && ownerKeyId) {
+      let owned = 0;
+      for (const key of sdDb.getKeys()) {
+        const s = sdDb.get(key);
+        if (s?.ownerKeyId === ownerKeyId) {
+          owned++;
+          if (owned >= limit) break;
+        }
+      }
+      if (owned >= limit) {
+        return {
+          allowed: false,
+          created: false,
+          reason: `${plan === 'free' ? 'Free tier' : 'Pro plan'} limit of ${limit} subdomain${limit !== 1 ? 's' : ''} reached. Upgrade for more.`,
+        };
+      }
+    }
+
+    const now = nowIso();
+    const subdomain: Subdomain = {
+      name,
+      created_at: now,
+      updated_at: now,
+      page_count: 0,
+      ownerKeyId,
+    };
+    sdDb.putSync(name, subdomain);
+    return { allowed: true, created: true, subdomain };
   });
 }
 

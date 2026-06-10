@@ -2,6 +2,16 @@ import type { Context } from 'hono';
 import type { Page } from '../storage/db.js';
 import type { Attestation } from '../types.js';
 
+/** Escape a value for safe use inside a double-quoted HTML attribute. */
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /**
  * Inject CAP Protocol provenance meta tags into HTML.
  * Adds <meta> tags for key-id, signature, digest, version, and recipient.
@@ -12,29 +22,32 @@ export function injectProvenanceMeta(html: string, page: Page): string {
   }
 
   const metaTags: string[] = [];
+  const meta = (name: string, content: string) => {
+    metaTags.push(`  <meta name="${name}" content="${escapeHtmlAttr(content)}">`);
+  };
   if (page.ownerKeyId) {
-    metaTags.push(`  <meta name="cap:key-id" content="${page.ownerKeyId}">`);
-    metaTags.push(`  <meta name="cap:key-url" content="/v1/keys/${page.ownerKeyId}/jwk">`);
+    meta('cap:key-id', page.ownerKeyId);
+    meta('cap:key-url', `/v1/keys/${page.ownerKeyId}/jwk`);
   }
   if (page.publishSignature) {
-    metaTags.push(`  <meta name="cap:signature" content="${page.publishSignature}">`);
+    meta('cap:signature', page.publishSignature);
   }
   if (page.contentDigest) {
-    metaTags.push(`  <meta name="cap:digest" content="${page.contentDigest}">`);
+    meta('cap:digest', page.contentDigest);
   }
   if (page.ownerKeyId || page.publishSignature) {
-    metaTags.push(`  <meta name="cap:version" content="0.1">`);
-    metaTags.push(`  <meta name="cap:verification-url" content="/v1/verify">`);
+    meta('cap:version', '0.1');
+    meta('cap:verification-url', '/v1/verify');
   }
   if (page.recipientKeyId) {
-    metaTags.push(`  <meta name="cap:recipient-key-id" content="${page.recipientKeyId}">`);
+    meta('cap:recipient-key-id', page.recipientKeyId);
   }
 
   // Attestation meta tags
   if (page.attestation) {
-    metaTags.push(`  <meta name="cap:attestation-type" content="${page.attestation.type}">`);
-    metaTags.push(`  <meta name="cap:attestation-subject-kind" content="${page.attestation.subject.kind}">`);
-    metaTags.push(`  <meta name="cap:attestation-subject-id" content="${page.attestation.subject.id}">`);
+    meta('cap:attestation-type', page.attestation.type);
+    meta('cap:attestation-subject-kind', page.attestation.subject.kind);
+    meta('cap:attestation-subject-id', page.attestation.subject.id);
   }
 
   const provenanceBlock = metaTags.join('\n');
