@@ -1,0 +1,13 @@
+{
+  "publicJwk": {
+    "crv": "Ed25519",
+    "x": "2T1zRwPP6b14vU52IhTKeS8rUB6etwdtrvF_658VBzE",
+    "kty": "OKP"
+  },
+  "privateJwk": {
+    "crv": "Ed25519",
+    "d": "Z5pUjzzWtYr93Dab5wpPWnbUzap7Foy8mZUDeIASh3g",
+    "x": "2T1zRwPP6b14vU52IhTKeS8rUB6etwdtrvF_658VBzE",
+    "kty": "OKP"
+  }
+}

@@ -25,6 +25,8 @@ import { serveSubdomainPage } from './routes/subdomainRender.js';
 import { adminKeys } from './routes/adminKeys.js';
 import { keys } from './routes/keys.js';
 import { verify } from './routes/verify.js';
+import { objects } from './routes/objects.js';
+import { trees, reviews } from './routes/trees.js';
 
 // Type for context variables
 type Variables = {
@@ -147,6 +149,9 @@ app.route('/v1/keys', keys);
 app.route('/v1/verify', verify);
 app.route('/v1/admin/keys', adminKeys);
 app.route('/v1/billing', billing);
+app.route('/v1/objects', objects);
+app.route('/v1/trees', trees);
+app.route('/v1/reviews', reviews);
 
 // Agent instructions
 app.route('/api/agent', agent);

@@ -4,7 +4,13 @@ import { rmSync } from 'fs';
 
 const TEST_DB_PATH = './data/test.lmdb';
 const TEST_VIDEO_PATH = './data/test-videos';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index', '-recipient-index'];
+const TEST_DB_SUFFIXES = [
+  '', '-subdomains', '-agent-keys', '-nonces', '-audit', '-owner-index', '-recipient-index',
+  '-attestation-subject-index', '-attestation-type-subject-index',
+  // CAP-Tree v0.3 environments — content-addressed, so they MUST be cleaned
+  // between runs or fixed-hash objects leak across test files as "already exists".
+  '-objects', '-tree-index', '-refs',
+];
 
 beforeAll(() => {
   process.env.NODE_ENV = 'test';

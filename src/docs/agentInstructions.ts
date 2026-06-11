@@ -1055,6 +1055,22 @@ Agents should switch on \`error_code\` for programmatic handling. The \`error\` 
 5. Use standalone pages for one-off artifacts such as reports and demos.
 6. Use the \`video\` field for uploaded video assets, or embed remote video inside HTML when that better fits your workflow.
 
+## CAP-Tree v0.3 (content-addressed object host)
+
+ZenBin is also a conformant CAP-Tree v0.3 host: content-addressed object
+storage, tree/refs read endpoints, and refs-chain enforcement — a live host for
+push/pull/clone of signed object trees. This is independent of the v0.2 pages
+API above; nothing is migrated.
+
+- Discovery: \`GET ${baseUrl}/.well-known/cap-tree.json\`
+- Publish (signed): \`POST ${baseUrl}/v1/objects\` — \`application/vnd.cap-tree+json\` (envelope) or \`application/octet-stream\` (blob)
+- Retrieve (open): \`GET ${baseUrl}/v1/objects/{hash}\`
+- Tree reads (open): \`GET ${baseUrl}/v1/trees/{treeId}\` and \`/refs\`, \`/refs/history\`, \`/roots/{rootHash}\`, \`/roots/{rootHash}/history\`, \`/resolve?root=&path=\`
+- Reviews (open): \`GET ${baseUrl}/v1/reviews?tree={treeId}\`
+
+All canonicalization, hashing, and verification follow the CAP-Tree spec:
+https://github.com/twilson63/cap-tree
+
 ## Support
 
 - Website: ${baseUrl}

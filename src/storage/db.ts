@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { open, Database } from 'lmdb';
 import { config } from '../config.js';
 import { deleteVideo } from './video.js';
+import { initCapTreeDb, closeCapTreeDb } from './capTreeDb.js';
 import { PLAN_LIMITS, isBillingCycleExpired } from '../rules.js';
 import type {
   Page,
@@ -124,6 +125,9 @@ export function initDatabase(): {
       compression: true,
     });
   }
+
+  // CAP-Tree v0.3 object/tree/refs environments (PRD § 4).
+  initCapTreeDb();
 
   return {
     pages: db,
@@ -1295,4 +1299,5 @@ export async function closeDatabase(): Promise<void> {
     await attestationTypeSubjectIndexDb.close();
     attestationTypeSubjectIndexDb = undefined as unknown as Database<PageSummary, string>;
   }
+  await closeCapTreeDb();
 }
