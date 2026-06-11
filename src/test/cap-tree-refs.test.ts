@@ -6,7 +6,7 @@ import { initDatabase, closeDatabase, updateAgentKeyPlan } from '../storage/db.j
 import { createServices, type Services } from '../services/container.js';
 import { rmSync } from 'fs';
 import { createTestSigner, createCapSignedHeaders, type TestSigner } from './helpers/signing.js';
-import { signEnvelope, type SignatureEnvelope, type Refs, type Ed25519Jwk } from '../vendor/cap-tree-core/index.js';
+import { signEnvelope, type SignatureEnvelope, type Refs, type Ed25519Jwk } from 'cap-tree-core';
 import vectors from './fixtures/cap-tree-vectors.json';
 import ownerKeys from './fixtures/cap-tree-keypair-owner.json';
 import reviewerKeys from './fixtures/cap-tree-keypair-reviewer.json';
@@ -115,5 +115,24 @@ describe('CAP-Tree refs — chain enforcement', () => {
     const body = await res.json();
     const seqs = body.refs.map((e: any) => e.payload.seq);
     expect(seqs).toEqual([2, 1]);
+  });
+
+  it('heals a chain-extended-but-unstored refs (crash window) on re-publish', async () => {
+    // Simulate the crash: advance the chain directly without storing the object.
+    const { extendRefsChain, getObject } = await import('../storage/capTreeDb.js');
+    const { objectHash } = await import('cap-tree-core');
+    const payload: Refs = { ...refsPayload('refsSeq2'), seq: 3, prev: seq2Hash, timestamp: '2034-04-04T00:00:00Z' };
+    const hash = await objectHash(payload);
+    const ext = extendRefsChain(treeId, 3, seq2Hash, hash);
+    expect(ext.ok).toBe(true);
+    expect(getObject(hash)).toBeUndefined(); // chain head exists, object missing
+
+    // Re-publishing the same envelope must succeed and store the object,
+    // not 409 against itself.
+    const res = await publishRefs(payload, owner);
+    expect([200, 201]).toContain(res.status);
+    expect(getObject(hash)).toBeDefined();
+    const cur = await app.request(`http://localhost/v1/trees/${treeId}/refs`);
+    expect((await cur.json()).payload.seq).toBe(3);
   });
 });

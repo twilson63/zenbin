@@ -6,7 +6,7 @@
  */
 import { Context, Hono } from 'hono';
 import { ErrorCodes, errorResponse } from '../errors.js';
-import { HASH_RE } from '../vendor/cap-tree-core/index.js';
+import { HASH_RE } from 'cap-tree-core';
 import type { Services } from '../services/container.js';
 
 const trees = new Hono();
@@ -55,7 +55,7 @@ trees.get('/:treeId/roots/:rootHash/history', (c) => {
     return errorResponse(ErrorCodes.OBJECT_NOT_FOUND, 'Root not found in this tree', 404);
   }
   const limit = parseLimit(c, 20, 100);
-  return c.json(services.objects.rootHistory(treeId, rootHash, limit));
+  return c.json(services.objects.rootHistory(treeId, rootHash, limit, c.req.query('cursor')));
 });
 
 trees.get('/:treeId/roots/:rootHash', (c) => {

@@ -7,7 +7,7 @@ import { initDatabase, closeDatabase, updateAgentKeyPlan } from '../storage/db.j
 import { createServices, type Services } from '../services/container.js';
 import { rmSync } from 'fs';
 import { createTestSigner, createCapSignedHeaders, type TestSigner } from './helpers/signing.js';
-import { type SignatureEnvelope } from '../vendor/cap-tree-core/index.js';
+import { type SignatureEnvelope } from 'cap-tree-core';
 import vectors from './fixtures/cap-tree-vectors.json';
 
 const CAP_CT = 'application/vnd.cap-tree+json';
@@ -71,6 +71,15 @@ describe('CAP-Tree reads — tree endpoints, reviews, discovery', () => {
     const body = await res.json();
     expect(body.roots.map((r: any) => r.hash)).toEqual([featureHash, secondHash, genesisHash]);
     expect(body.roots[0].entryCount).toBeGreaterThanOrEqual(0);
+  });
+
+  it('roots history pagination: next_cursor resumes the walk', async () => {
+    const page1 = await (await app.request(`http://localhost/v1/trees/${treeId}/roots/${featureHash}/history?limit=2`)).json();
+    expect(page1.roots.map((r: any) => r.hash)).toEqual([featureHash, secondHash]);
+    expect(page1.next_cursor).toBe(secondHash);
+    const page2 = await (await app.request(`http://localhost/v1/trees/${treeId}/roots/${featureHash}/history?limit=2&cursor=${page1.next_cursor}`)).json();
+    expect(page2.roots.map((r: any) => r.hash)).toEqual([genesisHash]);
+    expect(page2.next_cursor).toBeNull();
   });
 
   it('resolve walks a subtree path to its terminal entry', async () => {

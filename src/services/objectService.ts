@@ -21,7 +21,7 @@ import {
   type ReviewResponse,
   type Tree,
   type Resolver,
-} from '../vendor/cap-tree-core/index.js';
+} from 'cap-tree-core';
 import {
   getObject,
   hasObject,
@@ -229,6 +229,12 @@ export class ObjectService implements IObjectService {
     //    refs is always a chain member → generic idempotency stays correct.
     const ext = extendRefsChain(refs.treeId, refs.seq, refs.prev, hash);
     if (!ext.ok) {
+      if (ext.currentSeq === refs.seq && ext.currentHash === hash) {
+        // This exact refs object is already the chain head but wasn't stored —
+        // a crash between extend and store, or a concurrent duplicate publish.
+        // Heal: store it and report success rather than a conflict.
+        return this.store(clean, hash, refs.type, size, uploaderKeyId);
+      }
       return err(ErrorCodes.CAP_REFS_CONFLICT, 409, 'Refs chain conflict', undefined, {
         currentSeq: ext.currentSeq,
         currentHash: ext.currentHash,
@@ -321,12 +327,18 @@ export class ObjectService implements IObjectService {
     return o?.envelope ? (o.envelope as SignatureEnvelope<TreeRoot>) : null;
   }
 
-  /** Ancestor walk (BFS over parents), newest-first. */
-  rootHistory(treeId: string, rootHash: string, limit: number): { roots: Array<{ hash: string; parents: string[]; message: string; timestamp: string; entryCount: number }>; next_cursor: string | null } {
+  /**
+   * Ancestor walk (BFS over parents), newest-first. The BFS order is
+   * deterministic, so `cursor` (a previous page's next_cursor, a root hash)
+   * resumes the walk by skipping everything up to and including it.
+   */
+  rootHistory(treeId: string, rootHash: string, limit: number, cursor?: string): { roots: Array<{ hash: string; parents: string[]; message: string; timestamp: string; entryCount: number }>; next_cursor: string | null } {
     const out: Array<{ hash: string; parents: string[]; message: string; timestamp: string; entryCount: number }> = [];
     const seen = new Set<string>();
     const queue: string[] = [rootHash];
-    while (queue.length > 0 && out.length < limit + 1) {
+    let emitting = cursor === undefined;
+    let hasMore = false;
+    while (queue.length > 0) {
       const h = queue.shift()!;
       if (seen.has(h)) continue;
       seen.add(h);
@@ -334,19 +346,22 @@ export class ObjectService implements IObjectService {
       const o = getObject(h);
       const root = o?.envelope?.payload as TreeRoot | undefined;
       if (!root || root.type !== 'tree-root') continue;
-      out.push({
-        hash: h,
-        parents: root.parents.map((p) => p.hash),
-        message: root.message,
-        timestamp: root.timestamp,
-        entryCount: root.entries.length,
-      });
+      if (emitting) {
+        if (out.length >= limit) { hasMore = true; break; }
+        out.push({
+          hash: h,
+          parents: root.parents.map((p) => p.hash),
+          message: root.message,
+          timestamp: root.timestamp,
+          entryCount: root.entries.length,
+        });
+      } else if (h === cursor) {
+        emitting = true;
+      }
       for (const p of root.parents) queue.push(p.hash);
     }
-    const hasMore = out.length > limit;
-    const page = out.slice(0, limit);
-    const next_cursor = hasMore ? page[page.length - 1]!.hash : null;
-    return { roots: page, next_cursor };
+    const next_cursor = hasMore && out.length > 0 ? out[out.length - 1]!.hash : null;
+    return { roots: out, next_cursor };
   }
 
   /**

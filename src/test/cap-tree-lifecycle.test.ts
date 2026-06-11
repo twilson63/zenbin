@@ -15,7 +15,7 @@ import {
   generateKeyPair, signEnvelope, objectHash,
   verifyRootChain, verifyMerge, verifyRefs,
   type SignatureEnvelope, type TreeRoot, type Refs, type Policy, type ObjectRef, type Resolver,
-} from '../vendor/cap-tree-core/index.js';
+} from 'cap-tree-core';
 
 const CAP_CT = 'application/vnd.cap-tree+json';
 const TEST_DB_PATH = './data/test-cap-tree-lifecycle.lmdb';

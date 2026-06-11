@@ -149,7 +149,7 @@ export interface IVideoService {
 
 import type {
   SignatureEnvelope, ObjectRef, TreeRoot, Refs,
-} from '../vendor/cap-tree-core/index.js';
+} from 'cap-tree-core';
 import type { StoredObject } from '../storage/capTreeDb.js';
 import type { PublishResult } from './objectService.js';
 
@@ -162,7 +162,7 @@ export interface IObjectService {
   currentRefs(treeId: string): SignatureEnvelope<Refs> | null;
   refsHistory(treeId: string, before: number | undefined, limit: number): { entries: SignatureEnvelope<Refs>[]; next_cursor: number | null };
   rootOfTree(treeId: string, rootHash: string): SignatureEnvelope<TreeRoot> | null;
-  rootHistory(treeId: string, rootHash: string, limit: number): { roots: Array<{ hash: string; parents: string[]; message: string; timestamp: string; entryCount: number }>; next_cursor: string | null };
+  rootHistory(treeId: string, rootHash: string, limit: number, cursor?: string): { roots: Array<{ hash: string; parents: string[]; message: string; timestamp: string; entryCount: number }>; next_cursor: string | null };
   resolvePath(treeId: string, rootHash: string, path: string): Promise<{ path: string; kind: 'blob' | 'tree'; ref: ObjectRef } | null>;
   queryReviews(params: { treeId: string; type?: string; recipient?: string; outcome?: string; root?: string; limit: number; cursor?: string }): { reviews: SignatureEnvelope[]; next_cursor: string | null };
 }

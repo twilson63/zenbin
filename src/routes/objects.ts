@@ -10,7 +10,7 @@ import { Context, Hono } from 'hono';
 import { config } from '../config.js';
 import { requireSignedAgent } from '../middleware/signedAgent.js';
 import { ErrorCodes, errorResponse } from '../errors.js';
-import { HASH_RE, type SignatureEnvelope } from '../vendor/cap-tree-core/index.js';
+import { HASH_RE, type SignatureEnvelope } from 'cap-tree-core';
 import type { Services } from '../services/container.js';
 
 const objects = new Hono();

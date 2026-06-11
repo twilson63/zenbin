@@ -16,7 +16,7 @@
  */
 import { open, Database } from 'lmdb';
 import { config } from '../config.js';
-import type { SignatureEnvelope } from '../vendor/cap-tree-core/index.js';
+import type { SignatureEnvelope } from 'cap-tree-core';
 
 // ─── Stored value shapes ────────────────────────────────────
 

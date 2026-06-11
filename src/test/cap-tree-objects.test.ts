@@ -8,7 +8,7 @@ import { createTestSigner, createCapSignedHeaders, type TestSigner } from './hel
 import {
   objectHash, blobHash, signEnvelope,
   type SignatureEnvelope, type TreeRoot, type Ed25519Jwk,
-} from '../vendor/cap-tree-core/index.js';
+} from 'cap-tree-core';
 import vectors from './fixtures/cap-tree-vectors.json';
 import ownerKeys from './fixtures/cap-tree-keypair-owner.json';
 import reviewerKeys from './fixtures/cap-tree-keypair-reviewer.json';
