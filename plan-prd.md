@@ -1,6 +1,6 @@
 # PRD: CAP-Tree v0.3 HTTP Binding for ZenBin
 
-**Status:** Ready for implementation
+**Status:** ✅ Implemented (commit `a39d5f7`, branch `feat/cap-tree-v0.3-host`) — see § 11
 **Date:** 2026-06-11
 **Spec:** https://github.com/twilson63/cap-tree — normative references below are
 `data-model.md` (DM §) and `http-binding.md` (HB §) in that repo.
@@ -380,3 +380,53 @@ Existing test suites MUST stay green (`npx vitest run`).
 6. Lifecycle test, docs template updates, typecheck/lint pass.
 
 Each step leaves the repo green; commit per step.
+
+## 11. Progress (updated 2026-06-11)
+
+Implementation complete and verified in commit `a39d5f7` on
+`feat/cap-tree-v0.3-host`. Re-verified today: **429/429 tests pass (27
+files)** and `npm run typecheck` is clean.
+
+### Sequencing (§ 10) — all done
+
+| Step | Status | Notes |
+|---|---|---|
+| 1. Dependency + fixtures | ✅ | Vendored (§ 3 fallback) into `src/vendor/cap-tree-core/` — package was not on npm. Vectors at `src/test/fixtures/cap-tree-vectors.json`. |
+| 2. Storage | ✅ | Landed as a dedicated module `src/storage/capTreeDb.ts` (objects / tree-index / refs envs) rather than additions inside `db.ts`; refs head advance uses an atomic `transactionSync`. |
+| 3. `POST/GET /v1/objects` + § 5.2 validation | ✅ | `src/routes/objects.ts`, `src/services/objectService.ts`; `cap-tree-objects.test.ts`. |
+| 4. Refs enforcement | ✅ | 409 conflict carries `currentSeq`/`currentHash`; `cap-tree-refs.test.ts`. |
+| 5. Tree reads + reviews + discovery | ✅ | `src/routes/trees.ts`, `/.well-known/cap-tree.json`; `cap-tree-reads.test.ts`. |
+| 6. Lifecycle test + docs + typecheck | ✅ | `cap-tree-lifecycle.test.ts` (build → publish → clone → verify, API-only resolver); agent docs updated in `src/docs/agentInstructions.ts`. |
+
+### Acceptance criteria (§ 8) — all met
+
+1. ✅ Four new test files pass; full suite green (429/429); typecheck clean.
+2. ✅ All 8 vector envelopes + vector blob round-trip byte-exactly at their
+   stated hashes.
+3. ✅ Publish idempotent (re-publish → 200, identical record); no mutation path.
+4. ✅ Refs conflicts/gaps → 409 with recovery info; atomic writes; full history.
+5. ✅ Policy-violating merge accepted (201) — regression test in place.
+6. ✅ Reads open; publishes require signed requests via existing middleware.
+7. ✅ Discovery doc served and accurate.
+8. ✅ v0.2 suite unchanged and green.
+9. ✅ No new runtime dependency (cap-tree-core is vendored).
+
+### Deviations from plan
+
+- cap-tree-core was **vendored** (`src/vendor/cap-tree-core/`, MIT, with
+  source-commit header) per the § 3 fallback — swap to the npm package once
+  `cap-tree-core@0.3.0` is published. `tsconfig` gained `DOM` in `lib` for
+  WebCrypto types.
+- New storage lives in `src/storage/capTreeDb.ts` instead of extending
+  `db.ts` directly (`db.ts` only gained init wiring).
+- Test keypair fixtures added (`cap-tree-keypair-owner.json`,
+  `cap-tree-keypair-reviewer.json`); `setup.ts` now cleans the
+  content-addressed envs between files so fixed-hash objects don't leak.
+
+### Open items
+
+- § 9 stretch goals not implemented (by design — non-blocking): advisory
+  `policyEvaluation` annotation, `HEAD /v1/objects/{hash}`, per-uploader
+  listing.
+- Swap vendored copy for `cap-tree-core@0.3.0` from npm when published.
+- HB § 8 conformance evaluation against the deployed zenbin.org (post-deploy).
