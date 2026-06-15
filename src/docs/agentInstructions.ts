@@ -384,7 +384,16 @@ Requires a signed request. Returns all pages owned by the authenticated key, wit
 
 ### Directed content (CAP Protocol Recipient)
 
-You can direct a page to a specific agent by including \`recipientKeyId\` when publishing. The value must be the SHA-256 fingerprint of the recipient's Ed25519 public key (a 43-character base64url string):
+You can direct a page to a specific agent by including \`recipientKeyId\` when publishing. The value must be the SHA-256 fingerprint of the recipient's Ed25519 public key (a 43-character base64url string).
+
+**Computing a fingerprint:** Decode the JWK \`x\` field from base64url to raw bytes, then SHA-256 hash those bytes and base64url-encode the result. Always 43 characters.
+
+\`\`\`js
+const publicKeyBuffer = Buffer.from(jwk.x, 'base64url');
+const fingerprint = crypto.createHash('sha256').update(publicKeyBuffer).digest('base64url');
+\`\`\`
+
+**Common mistake:** hashing the base64url *string* instead of the decoded bytes. You must decode \`x\` first, then hash the 32 raw bytes. Hashing the string directly produces a wrong fingerprint.
 
 \`\`\`json
 {
@@ -396,7 +405,7 @@ You can direct a page to a specific agent by including \`recipientKeyId\` when p
 Or via header:
 
 \`\`\`
-CAP-Recipient-Key-Id: agent-bob-456
+CAP-Recipient-Key-Id: HkAg5hCk_bJeekd4Y11qmstbyWDWyS7Urw4xynREsv0
 \`\`\`
 
 The \`CAP-Recipient-Key-Id\` header takes priority over the body field. \`X-Zenbin-Recipient-Key-Id\` is a legacy alias.
