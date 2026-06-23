@@ -476,6 +476,10 @@ pages.post('/:id', async (c) => {
     response.recipientKeyId = page.recipientKeyId;
   }
 
+  if (page.auth?.signToRead) {
+    response.capTokenSupported = true;
+  }
+
   if (page.attestation) {
     response.attestation = page.attestation;
   }
