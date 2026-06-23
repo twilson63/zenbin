@@ -4,6 +4,7 @@ import { requireAdmin } from '../middleware/adminAuth.js';
 import { validateEd25519PublicJwk } from '../utils/httpSignature.js';
 import { computeFingerprint } from '../utils/fingerprint.js';
 import type { Services } from '../services/container.js';
+import type { Plan } from '../types.js';
 
 const adminKeys = new Hono();
 
@@ -166,6 +167,50 @@ adminKeys.get('/:keyId/audit', async (c) => {
 
   const logs = services.audit.listForKey(keyId);
   return c.json({ logs });
+});
+
+// PATCH /v1/admin/keys/:keyId/plan — Update key plan
+adminKeys.patch('/:keyId/plan', async (c) => {
+  const keyId = c.req.param('keyId');
+  const services = getServices(c);
+
+  let body: { plan?: string; resetUsage?: boolean };
+  try {
+    body = await c.req.json();
+  } catch {
+    return errorResponse(ErrorCodes.INVALID_JSON, 'Invalid JSON body', 400);
+  }
+
+  if (!body.plan || !['free', 'pro', 'enterprise'].includes(body.plan)) {
+    return errorResponse(ErrorCodes.INVALID_REQUEST, 'plan must be one of: free, pro, enterprise', 400);
+  }
+
+  const existing = services.keys.get(keyId);
+  if (!existing) {
+    return errorResponse(ErrorCodes.KEY_NOT_FOUND, 'Key not found', 404);
+  }
+
+  const updated = await services.keys.updatePlan(keyId, body.plan as Plan);
+
+  if (body.resetUsage) {
+    await services.keys.resetUsage(keyId);
+  }
+
+  await services.audit.save({
+    action: 'admin_update_plan',
+    targetType: 'agent_key',
+    keyId,
+    status: 'accepted',
+    metadata: { plan: body.plan, resetUsage: String(!!body.resetUsage) },
+  });
+
+  return c.json({
+    keyId: updated!.keyId,
+    plan: updated!.plan,
+    monthlyPageCount: body.resetUsage ? 0 : updated!.monthlyPageCount,
+    monthlySubdomainCount: body.resetUsage ? 0 : updated!.monthlySubdomainCount,
+    updated_at: updated!.updated_at,
+  });
 });
 
 // POST /v1/admin/keys/:keyId/block — Block a key

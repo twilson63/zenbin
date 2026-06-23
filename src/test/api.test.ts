@@ -520,6 +520,83 @@ describe('Admin key controls', () => {
     const data = await publishRes.json() as { error: string };
     expect(data.error).toContain('blocked');
   });
+
+  it('should update key plan to pro', async () => {
+    const planSigner = await createTestSigner(`plan-signer-${Date.now()}`);
+
+    // Upgrade to pro
+    const updateRes = await app.request(`/v1/admin/keys/${planSigner.keyId}/plan`, {
+      method: 'PATCH',
+      headers: {
+        'X-Admin-Token': config.admin.token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ plan: 'pro', resetUsage: true }),
+    });
+
+    expect(updateRes.status).toBe(200);
+    const data = await updateRes.json() as { keyId: string; plan: string; monthlyPageCount: number; monthlySubdomainCount: number };
+    expect(data.plan).toBe('pro');
+    expect(data.monthlyPageCount).toBe(0);
+    expect(data.monthlySubdomainCount).toBe(0);
+  });
+
+  it('should update key plan to enterprise', async () => {
+    const entSigner = await createTestSigner(`ent-signer-${Date.now()}`);
+
+    const updateRes = await app.request(`/v1/admin/keys/${entSigner.keyId}/plan`, {
+      method: 'PATCH',
+      headers: {
+        'X-Admin-Token': config.admin.token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ plan: 'enterprise' }),
+    });
+
+    expect(updateRes.status).toBe(200);
+    const data = await updateRes.json() as { keyId: string; plan: string };
+    expect(data.plan).toBe('enterprise');
+  });
+
+  it('should reject invalid plan values', async () => {
+    const invalidSigner = await createTestSigner(`invalid-plan-signer-${Date.now()}`);
+
+    const res = await app.request(`/v1/admin/keys/${invalidSigner.keyId}/plan`, {
+      method: 'PATCH',
+      headers: {
+        'X-Admin-Token': config.admin.token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ plan: 'invalid' }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('should reject plan update without admin token', async () => {
+    const noAdminSigner = await createTestSigner(`no-admin-signer-${Date.now()}`);
+
+    const res = await app.request(`/v1/admin/keys/${noAdminSigner.keyId}/plan`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: 'pro' }),
+    });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('should return 404 for non-existent key plan update', async () => {
+    const res = await app.request('/v1/admin/keys/nonexistent-key-12345/plan', {
+      method: 'PATCH',
+      headers: {
+        'X-Admin-Token': config.admin.token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ plan: 'pro' }),
+    });
+
+    expect(res.status).toBe(404);
+  });
 });
 
 describe('GET /p/:id', () => {
