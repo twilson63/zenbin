@@ -3,7 +3,7 @@ import { Hono, Context } from 'hono';
 import { getPage } from '../storage/db.js';
 import { validateId } from '../utils/validation.js';
 import { generateEtag, etagMatches } from '../utils/etag.js';
-import { verifyPassword, verifyUrlToken, parseBasicAuth } from '../utils/auth.js';
+import { verifyPassword, verifyUrlToken, parseBasicAuth, verifyCapToken } from '../utils/auth.js';
 import { checkAuthRateLimit, recordFailedAttempt, resetAuthAttempts } from '../middleware/authRateLimit.js';
 import { verifySignToRead } from '../middleware/signToRead.js';
 import { trackPageView } from '../analytics/posthog.js';
@@ -88,6 +88,18 @@ const SECURITY_HEADERS = {
 };
 
 async function verifyPageAuth(c: Context, page: Page): Promise<Response | null> {
+  // CAP access token check — before any other auth method
+  const capToken = c.req.query('cap_token');
+  if (capToken) {
+    const requestPath = new URL(c.req.url).pathname;
+    const result = verifyCapToken(capToken, requestPath, page);
+    if (result.authorized) {
+      return null;
+    }
+    // Bad cap_token = reject, don't fall through to other auth methods
+    return c.json({ error: result.reason, hint: 'cap_token' }, 401);
+  }
+
   if (!page.auth) {
     return null;
   }
