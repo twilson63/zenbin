@@ -355,3 +355,18 @@ By extending the protocol instead of building a separate inbox:
 12. **Cursor and `since` are orthogonal** — client passes `since` on every paginated request.
 13. **Empty string removes recipient** — send `recipientKeyId: ""` to make a page undirected.
 14. **Fingerprints computed at registration** — stored on `AgentKey`, backfilled for existing keys at startup.
+15. **CAP Access Tokens extend sign-to-read** — see `docs/specs/cap-access-token-v0.1.md` for the full specification.
+
+## CAP Access Tokens (v0.2.1 extension)
+
+When `auth.signToRead: true` is set on a page, the designated recipient (or page owner) can generate **CAP Access Tokens** — self-signed temporary URL tokens that grant read access until the token expires.
+
+- Token format: `v1.{base64url(keyId)}.{base64url(expires)}.{base64url(nonce)}.{base64url(signature)}`
+- Canonical string: `CAP_TOKEN\n{path}\n{expires}`
+- Owner key can generate tokens for any owned page; recipient key can generate tokens for signToRead pages directed to them.
+- Default max TTL: 86400 seconds (24 hours).
+- Access URL: `GET /p/{id}?cap_token=v1...` or `GET /{slug}?cap_token=v1...` (subdomain).
+- Invalid tokens return 401 with `hint: "cap_token"`.
+- Publish response includes `capTokenSupported: true` when `auth.signToRead` is set.
+
+Full specification: see `docs/specs/cap-access-token-v0.1.md`.
