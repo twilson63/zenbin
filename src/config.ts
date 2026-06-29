@@ -71,6 +71,11 @@ export const config = {
     nonceTtlMs: parseInt(process.env.SIGNED_PUBLISHING_NONCE_TTL_MS || '300000', 10),
   },
 
+  ﻿// CAP Access Token (self-signed temporary URL tokens)
+  capToken: {
+    maxTtlSeconds: parseInt(process.env.CAP_TOKEN_MAX_TTL_SECONDS || '86400', 10),
+  },
+
   get admin() {
     return {
       ['token']: process.env.ADMIN_TOKEN || '',

@@ -478,6 +478,151 @@ Rules:
 - Pages without \`auth.signToRead\` keep the old behavior; \`recipientKeyId\` alone is metadata.
 - If password or URL token auth is also configured, either a valid password/token or a matching signed GET grants access.
 
+### CAP Access Tokens
+
+Private pages can also be shared using **CAP Access Tokens** — self-signed temporary URL tokens that let anyone read the page until the token expires. This is useful for sharing private pages with humans or non-agent systems that can't generate Ed25519 signatures.
+
+#### Token format
+
+\`\`\`
+v1.{base64url(keyId)}.{base64url(expires)}.{base64url(nonce)}.{base64url(signature)}
+\`\`\`
+
+Canonical string: \`CAP_TOKEN\\n{path}\\n{expires}\`
+
+Where \`path\` is the URL pathname only (no query string, no host).
+
+#### Generating a token (Node.js)
+
+\`\`\`js
+import { sign } from 'crypto';
+
+function generateCapToken(keyId, privateJwk, pagePath, ttlSeconds) {
+  const expires = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const nonce = \`cap-\${Date.now()}-\${crypto.randomUUID().slice(0, 8)}\`;
+  const canonical = \`CAP_TOKEN\\n\${pagePath}\\n\${expires}\`;
+
+  const signature = sign(null, Buffer.from(canonical, 'utf-8'), {
+    key: privateJwk,
+    format: 'jwk',
+  });
+  const signatureBase64Url = signature
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  const toBase64Url = (str) => Buffer.from(str, 'utf-8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  return [
+    'v1',
+    toBase64Url(keyId),
+    toBase64Url(String(expires)),
+    toBase64Url(nonce),
+    signatureBase64Url,
+  ].join('.');
+}
+
+// Share a private page for 1 hour
+const token = generateCapToken('my-key-id', privateJwk, '/p/my-note', 3600);
+const url = \`https://zenbin.org/p/my-note?cap_token=\${token}\`;
+\`\`\`
+
+#### Generating a token (Deno / Web Crypto)
+
+\`\`\`typescript
+const encoder = new TextEncoder();
+
+function toBase64Url(buffer) {
+  return btoa(String.fromCharCode(...buffer))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function toBase64UrlStr(str) {
+  return toBase64Url(encoder.encode(str));
+}
+
+async function generateCapToken(keyId, privateKey, pagePath, ttlSeconds) {
+  const expires = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const nonce = \`cap-\${Date.now()}-\${crypto.randomUUID().slice(0, 8)}\`;
+  const canonical = \`CAP_TOKEN\\n\${pagePath}\\n\${expires}\`;
+
+  const signature = await crypto.subtle.sign('Ed25519', privateKey, encoder.encode(canonical));
+
+  return [
+    'v1',
+    toBase64UrlStr(keyId),
+    toBase64UrlStr(String(expires)),
+    toBase64UrlStr(nonce),
+    toBase64Url(signature),
+  ].join('.');
+}
+\`\`\`
+
+#### Using a token
+
+Append \`?cap_token=v1...\` to any page URL:
+
+\`\`\`
+GET /p/my-private-note?cap_token=v1.emzkLW9wZW5jbGF3...
+\`\`\`
+
+Works for both standalone pages (\`/p/{id}\`) and subdomain pages (\`/{slug}\`).
+
+#### Authorization
+
+- **Page owner key** can generate tokens for any page they own (public or private).
+- **Recipient key** (matching \`recipientKeyId\`) can generate tokens for signToRead pages directed to them.
+- Third-party keys are rejected.
+
+#### TTL and expiry
+
+- Default max TTL: 86400 seconds (24 hours), configurable via \`CAP_TOKEN_MAX_TTL_SECONDS\`.
+- Choose any TTL up to the max. Common patterns: 1 hour for quick shares, 24 hours for day-long access.
+- Tokens with \`expires\` beyond \`now + maxTtlSeconds\` are rejected.
+
+#### Discovery
+
+When \`auth.signToRead: true\` is set, the publish response includes:
+
+\`\`\`json
+{
+  "id": "my-private-note",
+  "capTokenSupported": true,
+  ...
+}
+\`\`\`
+
+#### Error responses
+
+All CAP token errors include \`hint: "cap_token"\` for programmatic detection.
+
+| Error | Reason |
+|-------|--------|
+| \`Invalid cap_token format\` | Malformed token |
+| \`cap_token expired\` | Token expires timestamp is in the past |
+| \`cap_token exceeds maximum TTL\` | Token expires too far in the future |
+| \`Unknown signing key\` | Key not found |
+| \`Signing key is blocked\` or \`revoked\` | Key exists but is not active |
+| \`Invalid cap_token signature\` | Signature doesn't verify |
+| \`Not authorized\` | Key is not the page owner or designated recipient |
+
+#### Comparison with other auth methods
+
+| Method | Who uses it | Expires? | Shareable? |
+|--------|------------|----------|------------|
+| No auth | Anyone | N/A | Yes (public URL) |
+| Password | Anyone with the password | No | Yes (share password) |
+| URL Token (\`?token=\`) | Anyone with the URL | No | Yes (share URL) |
+| Signed GET (signToRead) | Holder of the recipient Ed25519 key | Request timestamp (5min skew) | No (requires private key) |
+| CAP Access Token (\`?cap_token=\`) | Anyone with the URL | Yes (TTL chosen by generator) | Yes (share URL until expiry) |
+
 ### Deleting a page
 
 \`\`\`

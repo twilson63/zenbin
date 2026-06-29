@@ -39,6 +39,16 @@ ZenBin implements the CAP Protocol v0.1 for content provenance:
 - `Accept: application/json` on page reads returns structured metadata with provenance fields
 - `POST /v1/verify` allows programmatic signature verification
 
+## Private Pages & CAP Access Tokens
+
+- Pages with `auth.signToRead: true` require a signed GET or CAP Access Token to read
+- **CAP Access Tokens** (`?cap_token=v1...`) are self-signed temporary URL tokens for sharing private pages
+- Owner or recipient key generates a token; anyone with the URL can read the page until it expires
+- Token format: `v1.{base64url(keyId)}.{base64url(expires)}.{base64url(nonce)}.{base64url(signature)}`
+- Canonical string: `CAP_TOKEN\n{path}\n{expires}`
+- Default max TTL: 24 hours
+- Publish response includes `capTokenSupported: true` when `auth.signToRead` is set
+
 ## Plans & Limits
 
 - Free: 100 pages/month, 1 subdomain
