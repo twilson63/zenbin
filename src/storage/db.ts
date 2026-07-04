@@ -438,6 +438,29 @@ export function getPageCount(): number {
   return count;
 }
 
+// List all public page IDs for sitemap generation.
+// Excludes: removed pages, sign-to-read pages, password-protected pages,
+// and directed (recipient) pages — only truly public content.
+export function listPublicPageIds(): { id: string; subdomain: string | null; updated_at: string }[] {
+  const pagesDb = getDatabase();
+  const results: { id: string; subdomain: string | null; updated_at: string }[] = [];
+
+  for (const key of pagesDb.getKeys()) {
+    const page = pagesDb.get(key);
+    if (!page) continue;
+    if (page.status === 'removed') continue;
+    if (page.auth?.signToRead) continue;
+    if (page.auth?.passwordHash) continue;
+    if (page.recipientKeyId) continue;
+
+    // key format is "id" or "subdomain:id"
+    const id = key.includes(':') ? key.split(':').slice(1).join(':') : key;
+    results.push({ id, subdomain: page.subdomain ?? null, updated_at: page.updated_at });
+  }
+
+  return results;
+}
+
 export function listPagesBySubdomain(subdomain: string): Page[] {
   const pagesDb = getDatabase();
   const prefix = `${subdomain}:`;

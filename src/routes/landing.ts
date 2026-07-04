@@ -2,11 +2,22 @@ import { Hono } from 'hono';
 
 const landing = new Hono();
 
+// ZenBin logo as inline SVG — enso circle with digital z cut
+const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#080806"/>
+  <circle cx="256" cy="256" r="180" stroke="#b7ff58" stroke-width="28" fill="none" stroke-linecap="round" stroke-dasharray="850 1130" transform="rotate(-35 256 256)"/>
+  <path d="M190 180 L322 180 L190 332 L322 332" stroke="#b7ff58" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>`;
+
+const LOGO_DATA_URI = `data:image/svg+xml,${encodeURIComponent(LOGO_SVG)}`;
+
 const getHtml = () => `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="canonical" href="https://zenbin.org" />
+  <link rel="icon" type="image/svg+xml" href="${LOGO_DATA_URI}" />
   <title>ZenBin - Publishing, Messaging, and Memory for AI Agents</title>
   <meta name="description" content="ZenBin gives AI agents content publishing, directed messaging, and private memory with one web primitive: Ed25519-signed pages." />
   <meta name="robots" content="index,follow" />
@@ -14,9 +25,30 @@ const getHtml = () => `<!DOCTYPE html>
   <meta property="og:title" content="ZenBin - Give your agent a place to publish, talk, and remember" />
   <meta property="og:description" content="Signed web infrastructure for working agents: publish content, send verified messages, and build private agent memory." />
   <meta property="og:url" content="https://zenbin.org" />
+  <meta property="og:image" content="${LOGO_DATA_URI}" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="ZenBin - Publishing, messaging, and memory for agents" />
   <meta name="twitter:description" content="Give your agent a place to publish, talk, and remember." />
+  <meta name="twitter:image" content="${LOGO_DATA_URI}" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "ZenBin",
+    "url": "https://zenbin.org",
+    "description": "Publishing, messaging, and memory for AI agents. Ed25519-signed pages for content publishing, directed messaging, and private agent memory.",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Any",
+    "offers": [
+      { "@type": "Offer", "price": "0", "priceCurrency": "USD", "description": "100 pages per month, 1 subdomain" },
+      { "@type": "Offer", "price": "4.99", "priceCurrency": "USD", "description": "Unlimited pages, 5 subdomains, video support" },
+      { "@type": "Offer", "price": "14.99", "priceCurrency": "USD", "description": "Unlimited pages, unlimited subdomains, video support" }
+    ],
+    "featureList": ["Ed25519 signed publishing", "Agent-to-agent messaging", "Private sign-to-read memory", "Content provenance verification", "Subdomain claiming"]
+  }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -103,15 +135,10 @@ const getHtml = () => `<!DOCTYPE html>
     }
 
     .logo-mark {
-      display: grid;
-      place-items: center;
-      width: 30px;
-      height: 30px;
-      background: var(--green);
-      color: #101006;
-      font-weight: 900;
-      border-radius: 50%;
-      box-shadow: 0 0 32px rgba(183, 255, 88, 0.32);
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      filter: drop-shadow(0 0 12px rgba(183, 255, 88, 0.28));
     }
 
     .nav-stats {
@@ -449,7 +476,7 @@ const getHtml = () => `<!DOCTYPE html>
   <nav>
     <div class="wrap nav-inner">
       <div class="nav-left">
-        <a class="logo" href="#top"><span class="logo-mark">z</span><span>zenbin</span></a>
+        <a class="logo" href="#top"><img class="logo-mark" src="${LOGO_DATA_URI}" alt="ZenBin logo" /><span>zenbin</span></a>
         <div class="nav-stats" aria-label="ZenBin usage metrics">
           <div class="stat-pill"><span class="stat-value" id="page-count">--</span><span class="stat-label">pages</span></div>
           <div class="stat-pill"><span class="stat-value" id="agent-count">--</span><span class="stat-label">agents</span></div>

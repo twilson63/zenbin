@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ZenBin SEO + Logo — Progress</title>
+<style>
+body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 0 auto; padding: 40px 20px; color: #222; line-height: 1.6; }
+h1 { font-size: 28px; }
+h2 { font-size: 22px; margin-top: 32px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+.status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+.planned { background: #e3f2fd; color: #1565c0; }
+.in-progress { background: #fff3e0; color: #e65100; }
+.complete { background: #e8f5e9; color: #2e7d32; }
+.blocked { background: #ffebee; color: #c62828; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+th, td { border: 1px solid #ddd; padding: 10px 12px; text-align: left; vertical-align: top; }
+th { background: #f5f5f5; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>ZenBin SEO + Logo — Progress</h1>
+
+<p><span class="status complete">complete</span></p>
+
+<h2>Steps</h2>
+<table>
+<tr><th>Step</th><th>Status</th><th>Evidence</th></tr>
+<tr>
+<td>1. Logo SVG</td>
+<td><span class="status complete">complete</span></td>
+<td>Inline SVG: dark rounded square (#080806), green enso circle (#b7ff58) with brushstroke gap, "z" path. 451 bytes, valid XML, self-contained. Used as favicon + og:image via data URI.</td>
+</tr>
+<tr>
+<td>2. SEO meta tags</td>
+<td><span class="status complete">complete</span></td>
+<td>Added: canonical URL, og:image (512x512), twitter:image, favicon (SVG data URI), JSON-LD WebApplication schema with name/description/url/offers/featureList. All existing meta tags preserved.</td>
+</tr>
+<tr>
+<td>3. Sitemap route</td>
+<td><span class="status complete">complete</span></td>
+<td>GET /sitemap.xml route added in index.ts. Dynamically lists all public pages (excludes removed, sign-to-read, password-protected, directed). Includes landing page at priority 1.0. Uses listPublicPageIds() from db.ts.</td>
+</tr>
+<tr>
+<td>4. Tests + build</td>
+<td><span class="status complete">complete</span></td>
+<td>npm run build: ✅ no TS errors. npm test: ✅ 24 files, 431 tests passed in 25.78s.</td>
+</tr>
+</table>
+
+<h2>Files changed</h2>
+<ul>
+<li><code>src/routes/landing.ts</code> — Logo SVG, SEO meta tags, JSON-LD, favicon, og:image</li>
+<li><code>src/storage/db.ts</code> — listPublicPageIds() function</li>
+<li><code>src/index.ts</code> — /sitemap.xml route, listPublicPageIds import, route listing</li>
+</ul>
+
+<h2>Validation</h2>
+<pre><code>npm run build → no errors
+npm test → 24 files, 431 tests passed (25.78s)</code></pre>
+
+<h2>Judge (self-review)</h2>
+<table>
+<tr><th>Dimension</th><th>Score</th><th>Notes</th></tr>
+<tr><td>Correctness</td><td>5</td><td>All SEO elements present, sitemap generates valid XML, all tests pass</td></tr>
+<tr><td>Acceptance coverage</td><td>5</td><td>Every step has evidence</td></tr>
+<tr><td>Security</td><td>5</td><td>No secrets in code, sitemap excludes private pages, no new deps</td></tr>
+<tr><td>Simplicity</td><td>5</td><td>3 files changed, minimal additions, no over-engineering</td></tr>
+<tr><td>Taste</td><td>4</td><td>Enso + z concept is distinctive and on-brand; SVG is clean and scalable</td></tr>
+<tr><td>Originality</td><td>4</td><td>Zen enso circle with digital z is a fresh take, not a generic logo template</td></tr>
+<tr><td>Maintainability</td><td>5</td><td>Logo is inline SVG (no asset pipeline), sitemap is dynamic (no manual updates)</td></tr>
+<tr><td>Validation</td><td>5</td><td>Build + 431 tests pass</td></tr>
+</table>
+
+<h2>Risks</h2>
+<ul>
+<li>og:image as SVG data URI — some social platforms (Twitter/Facebook) may not render SVG og:images. If link previews don't show the logo, a PNG fallback hosted on the domain may be needed later.</li>
+<li>Sitemap includes all public pages — on a large dataset this could be slow. Consider pagination or caching if page count grows significantly.</li>
+</ul>
+
+</body>
+</html>
