@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ZenBin SEO + Logo — PRD</title>
+<style>
+body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 0 auto; padding: 40px 20px; color: #222; line-height: 1.6; }
+h1 { font-size: 28px; }
+h2 { font-size: 22px; margin-top: 32px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+th, td { border: 1px solid #ddd; padding: 10px 12px; text-align: left; vertical-align: top; }
+th { background: #f5f5f5; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+pre { background: #f5f5f5; padding: 14px; border-radius: 6px; overflow-x: auto; }
+ul { padding-left: 20px; }
+.status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+.planned { background: #e3f2fd; color: #1565c0; }
+</style>
+</head>
+<body>
+
+<h1>ZenBin SEO Enhancement + Killer Logo</h1>
+
+<p><strong>Definition:</strong> Add proper SEO infrastructure (structured data, sitemap, canonical URLs, og:image) and create a distinctive logo image for ZenBin.org — the publishing/messaging/memory platform for AI agents.</p>
+
+<p><strong>Non-goals:</strong> Redesigning the landing page layout, changing copy, adding new routes beyond SEO endpoints, changing the build system.</p>
+
+<h2>Constraints</h2>
+<ul>
+<li>Logo must be an SVG inline asset (no external dependencies, no CDN, renders from file://)</li>
+<li>No new npm dependencies</li>
+<li>Must pass all 431 existing tests</li>
+<li>Landing page is a single inline HTML template in <code>src/routes/landing.ts</code> — all changes go there</li>
+<li>Sitemap must be generated dynamically from the LMDB page index</li>
+<li>og:image should be an SVG data URI or inline SVG (no external image hosting)</li>
+</ul>
+
+<h2>Research Notes</h2>
+<ul>
+<li>Landing page lives in <code>src/routes/landing.ts</code> as a single template literal function <code>getHtml()</code></li>
+<li>Has OG/Twitter meta tags but missing: <code>og:image</code>, canonical URL, JSON-LD structured data, favicon</li>
+<li><code>robots.txt</code> exists at <code>src/index.ts:90</code> and references <code>sitemap.xml</code> but no route serves it</li>
+<li>No <code>static/</code> or <code>assets/</code> directory exists</li>
+<li><code>src/routes/stats.ts</code> exposes <code>GET /v1/stats</code> with page/agent/subdomain counts</li>
+<li>Stats service <code>services.pages</code> has page indexing capabilities for sitemap generation</li>
+<li>431 tests passing on <code>main</code> branch</li>
+<li>Existing logo: a green circle with "z" letter (<code>.logo-mark</code> CSS class) — no image file</li>
+<li>Brand colors: <code>--green: #b7ff58</code>, <code>--coal: #080806</code>, <code>--cream: #fff4d8</code>, <code>--orange: #ff8a3d</code></li>
+</ul>
+
+<h2>Plan</h2>
+<table>
+<tr><th>Step</th><th>Acceptance criteria</th><th>Evidence</th></tr>
+<tr>
+<td><strong>Step 1: Logo SVG</strong><br>Create an inline SVG logo for ZenBin — a distinctive mark that works as both favicon and og:image. Dark background, green accent, clean geometric style matching the brand.</td>
+<td>
+<ul>
+<li>SVG is valid, self-contained, no external refs</li>
+<li>Renders at 32x32 (favicon) and 1200x630 (og:image) without distortion</li>
+<li>Uses brand colors (#b7ff58 green, #080806 dark)</li>
+<li>Visually distinctive — not a generic template</li>
+</ul>
+</td>
+<td>SVG renders in browser, visual inspection</td>
+</tr>
+<tr>
+<td><strong>Step 2: SEO meta tags</strong><br>Add canonical URL, og:image, JSON-LD structured data, and favicon link to the landing page head.</td>
+<td>
+<ul>
+<li><code>&lt;link rel="canonical"&gt;</code> present pointing to https://zenbin.org</li>
+<li><code>&lt;meta property="og:image"&gt;</code> present with SVG data URI or hosted URL</li>
+<li><code>&lt;link rel="icon"&gt;</code> favicon present (SVG data URI)</li>
+<li>JSON-LD <code>SoftwareApplication</code> or <code>WebApplication</code> schema with name, description, url, offers</li>
+<li>All existing meta tags preserved</li>
+</ul>
+</td>
+<td>HTML source inspection, Google Rich Results Test compliance</td>
+</tr>
+<tr>
+<td><strong>Step 3: Sitemap route</strong><br>Add <code>GET /sitemap.xml</code> route that dynamically lists all public pages.</td>
+<td>
+<ul>
+<li>Route returns <code>application/xml</code> with valid sitemap XML</li>
+<li>Includes landing page URL</li>
+<li>Includes all public page URLs (<code>/p/{id}</code>)</li>
+<li>Excludes API endpoints and private pages</li>
+<li>robots.txt reference now resolves</li>
+</ul>
+</td>
+<td>curl <code>/sitemap.xml</code> returns valid XML, passes W3C validation</td>
+</tr>
+<tr>
+<td><strong>Step 4: Tests + build</strong><br>Ensure all changes compile and tests pass.</td>
+<td>
+<ul>
+<li><code>npm run build</code> succeeds with no TS errors</li>
+<li><code>npm test</code> — all 431+ tests pass</li>
+<li>New sitemap route has at least one test</li>
+</ul>
+</td>
+<td>Build output, test runner output</td>
+</tr>
+</tr>
+</table>
+
+<h2>Validation</h2>
+<pre><code>cd /home/node/.openclaw/workspace/ZenBin
+npm run build && npm test</code></pre>
+
+<h2>Judge rubric</h2>
+<p>Correctness, coverage, security, simplicity, taste, originality, maintainability</p>
+
+<h2>Definition of done</h2>
+<ul>
+<li>Landing page has canonical URL, og:image, favicon, and JSON-LD structured data</li>
+<li>Logo SVG is distinctive, on-brand, and works at favicon and social card sizes</li>
+<li>Sitemap.xml route serves valid XML listing public pages</li>
+<li>All tests pass, build succeeds</li>
+<li>No new dependencies added</li>
+</ul>
+
+</body>
+</html>

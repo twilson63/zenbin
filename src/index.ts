@@ -5,7 +5,7 @@ import { logger } from 'hono/logger';
 import { bodyLimit } from 'hono/body-limit';
 import dotenv from 'dotenv';
 import { config } from './config.js';
-import { initDatabase, closeDatabase, backfillOwnerIndex, backfillRecipientIndex, backfillKeyFingerprints, backfillAttestationIndexes, cleanupExpiredNonces } from './storage/db.js';
+import { initDatabase, closeDatabase, backfillOwnerIndex, backfillRecipientIndex, backfillKeyFingerprints, backfillAttestationIndexes, cleanupExpiredNonces, listPublicPageIds } from './storage/db.js';
 import { initVideoStorage } from './storage/video.js';
 import { createServices, type Services } from './services/container.js';
 import { pages } from './routes/pages.js';
@@ -137,6 +137,30 @@ app.get('/llms.txt', async (c) => {
 // Health check
 app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Sitemap.xml - dynamically generated from public pages
+app.get('/sitemap.xml', (c) => {
+  const baseUrl = config.baseUrl;
+  const publicPages = listPublicPageIds();
+
+  const urls: string[] = [`  <url><loc>${baseUrl}/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>`];
+
+  for (const page of publicPages) {
+    const pageUrl = page.subdomain
+      ? `https://${page.subdomain}.${baseUrl.replace('https://', '')}/p/${page.id}`
+      : `${baseUrl}/p/${page.id}`;
+    const lastmod = page.updated_at ? `<lastmod>${page.updated_at}</lastmod>` : '';
+    urls.push(`  <url><loc>${pageUrl}</loc>${lastmod}<changefreq>monthly</changefreq><priority>0.6</priority></url>`);
+  }
+
+  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.join('\n')}
+</urlset>`;
+
+  c.header('Content-Type', 'application/xml; charset=utf-8');
+  return c.body(sitemap);
 });
 
 // API routes
@@ -299,6 +323,7 @@ Endpoints:
   GET  /                        - Landing page
   GET  /robots.txt              - Robots.txt for crawlers
   GET  /llms.txt                - LLM discoverability file
+  GET  /sitemap.xml             - XML sitemap for search engines
   GET  /.well-known/agent.md     - Agent setup: keygen → register → publish
   GET  /.well-known/skill.md     - Agent instructions
   GET  /.well-known/register.md  - Agent key registration + signing guide
