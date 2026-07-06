@@ -559,6 +559,45 @@ export function getSubdomain(name: string): Subdomain | undefined {
   return getSubdomainDatabase().get(name);
 }
 
+/**
+ * Transfer subdomain ownership to a new key.
+ * Does NOT touch pages — existing pages remain accessible.
+ * Returns the updated Subdomain or undefined if not found.
+ */
+export function transferSubdomainOwnership(name: string, newOwnerKeyId: string): Subdomain | undefined {
+  const sdDb = getSubdomainDatabase();
+  const existing = sdDb.get(name);
+  if (!existing) return undefined;
+
+  const updated: Subdomain = {
+    ...existing,
+    ownerKeyId: newOwnerKeyId,
+    updated_at: nowIso(),
+  };
+  sdDb.putSync(name, updated);
+  return updated;
+}
+
+/**
+ * Release subdomain ownership (clear ownerKeyId).
+ * The subdomain record remains, pages remain accessible, but any key
+ * can claim it via POST /v1/subdomains/:name.
+ * Returns the updated Subdomain or undefined if not found.
+ */
+export function releaseSubdomain(name: string): Subdomain | undefined {
+  const sdDb = getSubdomainDatabase();
+  const existing = sdDb.get(name);
+  if (!existing) return undefined;
+
+  const updated: Subdomain = {
+    ...existing,
+    ownerKeyId: undefined,
+    updated_at: nowIso(),
+  };
+  sdDb.putSync(name, updated);
+  return updated;
+}
+
 export async function deleteSubdomain(name: string): Promise<boolean> {
   const existing = getSubdomainDatabase().get(name);
   if (!existing) {
@@ -1245,9 +1284,12 @@ export function reserveAndClaimSubdomain(
   const sdDb = getSubdomainDatabase();
   return sdDb.transactionSync(() => {
     const existing = sdDb.get(name);
-    if (existing) {
+    if (existing && existing.ownerKeyId) {
       return { allowed: true, created: false, subdomain: existing };
     }
+
+    // If the subdomain exists but has no owner (released), re-claim it.
+    // If it doesn't exist at all, create it.
 
     const limit = PLAN_LIMITS[plan].subdomains;
     if (limit !== Infinity && ownerKeyId) {
@@ -1271,9 +1313,9 @@ export function reserveAndClaimSubdomain(
     const now = nowIso();
     const subdomain: Subdomain = {
       name,
-      created_at: now,
+      created_at: existing?.created_at || now,
       updated_at: now,
-      page_count: 0,
+      page_count: existing?.page_count || 0,
       ownerKeyId,
     };
     sdDb.putSync(name, subdomain);
