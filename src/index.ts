@@ -23,6 +23,7 @@ import { serveLandingPage } from './routes/landing.js';
 import { billing } from './routes/billing.js';
 import { serveSubdomainPage } from './routes/subdomainRender.js';
 import { adminKeys } from './routes/adminKeys.js';
+import { adminSubdomains } from './routes/adminSubdomains.js';
 import { keys } from './routes/keys.js';
 import { verify } from './routes/verify.js';
 
@@ -170,6 +171,7 @@ app.route('/v1/stats', stats);
 app.route('/v1/keys', keys);
 app.route('/v1/verify', verify);
 app.route('/v1/admin/keys', adminKeys);
+app.route('/v1/admin/subdomains', adminSubdomains);
 app.route('/v1/billing', billing);
 
 // Agent instructions

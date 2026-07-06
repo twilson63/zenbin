@@ -13,6 +13,8 @@ import {
   decrementSubdomainPageCount as dbDecrementSubdomainPageCount,
   reserveAndClaimSubdomain as dbReserveAndClaimSubdomain,
   countSubdomainsByOwner as dbCountSubdomainsByOwner,
+  transferSubdomainOwnership as transferSubdomainOwnershipDb,
+  releaseSubdomain as releaseSubdomainDb,
   incrementAgentKeyUsage,
   getAgentKey,
 } from '../storage/db.js';
@@ -102,5 +104,51 @@ export class SubdomainService implements ISubdomainService {
     }
 
     return { valid: true };
+  }
+
+  /**
+   * Transfer subdomain ownership to a new key.
+   * Validates the subdomain exists and the target key is registered + active.
+   * Does NOT touch pages.
+   */
+  transferOwnership(name: string, newOwnerKeyId: string): { subdomain?: Subdomain; error?: string; status?: number } {
+    const existing = this.get(name);
+    if (!existing) {
+      return { error: `Subdomain '${name}' not found`, status: 404 };
+    }
+
+    const targetKey = getAgentKey(newOwnerKeyId);
+    if (!targetKey) {
+      return { error: `Key '${newOwnerKeyId}' not found`, status: 400 };
+    }
+    if (targetKey.status !== 'active') {
+      return { error: `Key '${newOwnerKeyId}' is not active (status: ${targetKey.status})`, status: 400 };
+    }
+
+    const updated = transferSubdomainOwnershipDb(name, newOwnerKeyId);
+    if (!updated) {
+ return { error: `Subdomain '${name}' not found`, status: 404 };
+    }
+
+    return { subdomain: updated };
+  }
+
+  /**
+   * Release subdomain ownership (clear ownerKeyId).
+   * The subdomain becomes claimable by any key via POST /v1/subdomains/:name.
+   * Does NOT touch pages.
+   */
+  releaseOwnership(name: string): { subdomain?: Subdomain; error?: string; status?: number } {
+    const existing = this.get(name);
+    if (!existing) {
+      return { error: `Subdomain '${name}' not found`, status: 404 };
+    }
+
+    const updated = releaseSubdomainDb(name);
+    if (!updated) {
+      return { error: `Subdomain '${name}' not found`, status: 404 };
+    }
+
+    return { subdomain: updated };
   }
 }

@@ -60,7 +60,7 @@ subdomains.post('/:name', async (c) => {
   }
 
   const existing = services.subdomains.get(name);
-  if (existing) {
+  if (existing && existing.ownerKeyId) {
     return errorResponse(ErrorCodes.SUBDOMAIN_TAKEN, `Subdomain '${name}' is already taken`, 409);
   }
 

@@ -94,6 +94,10 @@ export interface ISubdomainService {
 
   // Validation
   validateName(name: string): { valid: boolean; error?: string };
+
+  // Admin operations
+  transferOwnership(name: string, newOwnerKeyId: string): { subdomain?: Subdomain; error?: string; status?: number };
+  releaseOwnership(name: string): { subdomain?: Subdomain; error?: string; status?: number };
 }
 
 // ─── Key Service ────────────────────────────────────────────
