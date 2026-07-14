@@ -64,6 +64,21 @@ export const ErrorCodes = {
   VIDEO_NOT_FOUND: 'VIDEO_NOT_FOUND',
   MARKDOWN_NOT_FOUND: 'MARKDOWN_NOT_FOUND',
   IMAGE_NOT_FOUND: 'IMAGE_NOT_FOUND',
+
+  // CAP-Tree v0.3 errors (PRD § 6). 422 bodies carry an `errors: string[]`.
+  CAP_ENVELOPE_INVALID: 'CAP_ENVELOPE_INVALID',        // 422
+  CAP_OBJECT_INVALID: 'CAP_OBJECT_INVALID',            // 422
+  CAP_OWNER_MISMATCH: 'CAP_OWNER_MISMATCH',            // 422
+  CAP_PARENT_UNKNOWN: 'CAP_PARENT_UNKNOWN',            // 422
+  CAP_CHAIN_INVALID: 'CAP_CHAIN_INVALID',              // 422
+  CAP_TREE_UNKNOWN: 'CAP_TREE_UNKNOWN',                // 404
+  CAP_REF_TARGET_UNKNOWN: 'CAP_REF_TARGET_UNKNOWN',    // 422
+  CAP_NOT_OWNER: 'CAP_NOT_OWNER',                      // 403
+  CAP_REFS_CONFLICT: 'CAP_REFS_CONFLICT',              // 409
+  OBJECT_NOT_FOUND: 'OBJECT_NOT_FOUND',                // 404
+  OBJECT_TOO_LARGE: 'OBJECT_TOO_LARGE',                // 413
+  REFS_NOT_FOUND: 'REFS_NOT_FOUND',                    // 404
+  PATH_NOT_FOUND: 'PATH_NOT_FOUND',                    // 404
 } as const;
 
 export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];

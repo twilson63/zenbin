@@ -94,6 +94,13 @@ export const config = {
     };
   },
 
+  // CAP-Tree v0.3 host (content-addressed object storage)
+  get capTree() {
+    return {
+      maxObjectBytes: parseInt(process.env.CAP_TREE_MAX_OBJECT_BYTES || '10485760', 10),
+    };
+  },
+
   // Subdomains
   get subdomains() {
     return {

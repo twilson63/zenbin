@@ -12,6 +12,7 @@ import { NonceService } from './nonceService.js';
 import { AuditService } from './auditService.js';
 import { VideoService } from './videoService.js';
 import { billingService } from './billingService.js';
+import { ObjectService } from './objectService.js';
 import type {
   IPageService,
   ISubdomainService,
@@ -20,6 +21,7 @@ import type {
   IAuditService,
   IVideoService,
   IBillingService,
+  IObjectService,
 } from './interfaces.js';
 
 export interface Services {
@@ -30,6 +32,7 @@ export interface Services {
   audit: IAuditService;
   videos: IVideoService;
   billing: IBillingService;
+  objects: IObjectService;
 }
 
 export function createServices(): Services {
@@ -41,5 +44,6 @@ export function createServices(): Services {
     audit: new AuditService(),
     videos: new VideoService(),
     billing: billingService,
+    objects: new ObjectService(),
   };
 }
