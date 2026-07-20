@@ -8,26 +8,10 @@
 // ─── Attestation ───────────────────────────────────────────
 
 export interface Attestation {
-  /** What kind of claim this is */
   type: string;
-
-  /** What the claim is about */
-  subject: {
-    /** "agent" or "asset" */
-    kind: 'agent' | 'asset';
-
-    /** For agent: SHA-256 fingerprint of the subject's Ed25519 public key (43-char base64url)
-     *  For asset: signed page reference — {ownerKeyId}/{pageId} */
-    id: string;
-  };
-
-  /** Optional: human-readable context about this claim */
+  subject: { kind: 'agent' | 'asset'; id: string };
   context?: string;
-
-  /** Optional: structured metadata (type-specific) */
   metadata?: Record<string, unknown>;
-
-  /** Optional: timestamp when the attestation was made (defaults to CAP-Timestamp) */
   timestamp?: string;
 }
 
@@ -38,10 +22,8 @@ export type { StoredJwk };
 
 // ─── Plans & Billing ───────────────────────────────────────
 
-/** Agent key plan tier */
 export type Plan = 'free' | 'pro' | 'enterprise';
 
-/** Plan-specific resource limits */
 export interface PlanLimits {
   pagesPerMonth: number;
   subdomains: number;
@@ -49,7 +31,6 @@ export interface PlanLimits {
   videoStorageBytes: number;
 }
 
-/** Billing info attached to an agent key */
 export interface BillingInfo {
   plan: Plan;
   stripeCustomerId?: string;
@@ -106,12 +87,38 @@ export interface Subdomain {
   ownerKeyId?: string;
 }
 
-// ─── Agent Key ──────────────────────────────────────────────
+// ─── Custom domains ─────────────────────────────────────────
+
+export type CustomDomainLifecycleStatus = 'pending_dns' | 'provisioning' | 'active' | 'error' | 'deleting';
+export type CustomDomainVerificationStatus = 'pending' | 'verified' | 'failed';
+export type CustomDomainCertificateStatus = 'pending' | 'active' | 'failed';
+
+/** A custom hostname aliases a signed-owner subdomain; it never owns content itself. */
+export interface CustomDomain {
+  hostname: string;
+  subdomain: string;
+  ownerKeyId: string;
+  verificationToken?: string;
+  verificationTokenHash: string;
+  verificationStatus: CustomDomainVerificationStatus;
+  certificateStatus: CustomDomainCertificateStatus;
+  lifecycleStatus: CustomDomainLifecycleStatus;
+  provider?: string;
+  providerHostnameId?: string;
+  primaryDomain: boolean;
+  lastErrorCode?: string;
+  lastErrorDetail?: string;
+  createdAt: string;
+  updatedAt: string;
+  verifiedAt?: string;
+  activatedAt?: string;
+}
+
+// ─── Agent Key ─────────────────────────────────────────────
 
 export interface AgentKey {
   keyId: string;
   publicJwk: StoredJwk;
-  /** SHA-256 of the Ed25519 public key, base64url-encoded (43 chars). Derived from publicJwk.x at registration. */
   publicKeyFingerprint: string;
   status: 'active' | 'blocked' | 'revoked';
   scopes: string[];
@@ -121,7 +128,6 @@ export interface AgentKey {
   blocked_reason?: string;
   blocked_at?: string;
   revoked_at?: string;
-  // Billing fields
   plan: Plan;
   stripeCustomerId?: string;
   subscriptionId?: string;
@@ -145,7 +151,7 @@ export interface NonceRecord {
 export interface AuditLogRecord {
   id: string;
   action: string;
-  targetType: 'page' | 'subdomain' | 'agent_key' | 'auth';
+  targetType: 'page' | 'subdomain' | 'custom_domain' | 'agent_key' | 'auth';
   keyId?: string;
   pageId?: string;
   subdomain?: string;

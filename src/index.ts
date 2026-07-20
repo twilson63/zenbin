@@ -30,6 +30,7 @@ import { verify } from './routes/verify.js';
 // Type for context variables
 type Variables = {
   subdomain: string;
+  externalHost: boolean;
   services: Services;
 };
 
@@ -74,6 +75,16 @@ app.use('*', async (c, next) => {
       if (!reserved.has(potentialSubdomain) && potentialSubdomain !== 'www') {
         c.set('subdomain', potentialSubdomain);
       }
+    }
+  } else {
+    const baseUrlHost = new URL(config.baseUrl).hostname.toLowerCase();
+    const firstParty = host === baseDomain || host === `www.${baseDomain}` || host === baseUrlHost || host === 'localhost';
+    if (!firstParty) {
+      // Custom hosts are looked up only after normalized, active control-plane state.
+      // They never fall through to the landing site or a guessed tenant.
+      const customDomain = services.domains.getActiveForHost(host);
+      if (customDomain) c.set('subdomain', customDomain.subdomain);
+      else c.set('externalHost', true);
     }
   }
 
@@ -193,6 +204,9 @@ app.get('/', async (c) => {
     return serveSubdomainPage(c, subdomain, '/');
   }
   
+  // Unknown external hosts are deliberately neutral; never serve the landing site.
+  if (c.get('externalHost')) return c.json({ error: 'Not found' }, 404);
+
   // Main domain request - render landing page
   return serveLandingPage(c);
 });
@@ -207,7 +221,7 @@ app.get('/*', async (c) => {
     return serveSubdomainPage(c, subdomain, path);
   }
   
-  // Main domain request - not found for other paths
+  // Main domain or unknown external request - not found.
   return c.json({ error: 'Not found' }, 404);
 });
 

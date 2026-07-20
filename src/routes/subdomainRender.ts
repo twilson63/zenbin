@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import { Hono, Context, Next } from 'hono';
 import { config } from '../config.js';
+import { resolveCustomDomainHost } from '../services/customDomainService.js';
 import { getPage, getSubdomain } from '../storage/db.js';
 import { validateId } from '../utils/validation.js';
 import { generateEtag, etagMatches } from '../utils/etag.js';
@@ -409,6 +410,9 @@ const extractSubdomain = async (c: Context, next: Next) => {
         c.set('subdomain', potentialSubdomain);
       }
     }
+  } else {
+    const customDomain = resolveCustomDomainHost(host);
+    if (customDomain) c.set('subdomain', customDomain.subdomain);
   }
 
   await next();
