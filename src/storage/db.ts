@@ -15,6 +15,7 @@ import type {
   Plan,
   StoredJwk,
   Attestation,
+  CustomDomain,
 } from '../types.js';
 
 // Re-export types for backward compatibility
@@ -30,10 +31,12 @@ export type {
   Plan,
   StoredJwk,
   Attestation,
+  CustomDomain,
 };
 
 let db: Database<Page, string>;
 let subdomainDb: Database<Subdomain, string>;
+let customDomainDb: Database<CustomDomain, string>;
 let agentKeyDb: Database<AgentKey, string>;
 let nonceDb: Database<NonceRecord, string>;
 let auditLogDb: Database<AuditLogRecord, string>;
@@ -62,6 +65,7 @@ export interface PageSummary {
 export function initDatabase(): {
   pages: Database<Page, string>;
   subdomains: Database<Subdomain, string>;
+  customDomains: Database<CustomDomain, string>;
   agentKeys: Database<AgentKey, string>;
   nonces: Database<NonceRecord, string>;
   auditLogs: Database<AuditLogRecord, string>;
@@ -79,6 +83,12 @@ export function initDatabase(): {
   if (!subdomainDb) {
     subdomainDb = open<Subdomain, string>({
       path: `${config.lmdbPath}-subdomains`,
+      compression: true,
+    });
+  }
+  if (!customDomainDb) {
+    customDomainDb = open<CustomDomain, string>({
+      path: `${config.lmdbPath}-custom-domains`,
       compression: true,
     });
   }
@@ -128,6 +138,7 @@ export function initDatabase(): {
   return {
     pages: db,
     subdomains: subdomainDb,
+    customDomains: customDomainDb,
     agentKeys: agentKeyDb,
     nonces: nonceDb,
     auditLogs: auditLogDb,
@@ -256,7 +267,20 @@ export function getSubdomainDatabase(): Database<Subdomain, string> {
   return subdomainDb;
 }
 
+export function getCustomDomainDatabase(): Database<CustomDomain, string> {
+  if (!customDomainDb) {
+    throw new Error('Database not initialized. Call initDatabase() first.');
+  }
+  return customDomainDb;
+}
+
 export function getAgentKeyDatabase(): Database<AgentKey, string> {
+  if (!customDomainDb) {
+    customDomainDb = open<CustomDomain, string>({
+      path: `${config.lmdbPath}-custom-domains`,
+      compression: true,
+    });
+  }
   if (!agentKeyDb) {
     throw new Error('Database not initialized. Call initDatabase() first.');
   }
@@ -563,6 +587,78 @@ export async function deleteSubdomain(name: string): Promise<boolean> {
   }
 
   getSubdomainDatabase().removeSync(name);
+  return true;
+}
+
+export function createCustomDomain(input: {
+  hostname: string;
+  subdomain: string;
+  ownerKeyId: string;
+  verificationToken: string;
+  verificationTokenHash: string;
+}): { domain: CustomDomain; created: boolean } {
+  const domains = getCustomDomainDatabase();
+  return domains.transactionSync(() => {
+    const existing = domains.get(input.hostname);
+    if (existing) return { domain: existing, created: false };
+    // MVP supports one hostname per subdomain; later aliases require an explicit
+    // product-level expansion rather than accidentally becoming supported here.
+    for (const key of domains.getKeys()) {
+      const candidate = domains.get(key);
+      if (candidate?.subdomain === input.subdomain) return { domain: candidate, created: false };
+    }
+    const now = nowIso();
+    const domain: CustomDomain = {
+      hostname: input.hostname,
+      subdomain: input.subdomain,
+      ownerKeyId: input.ownerKeyId,
+      verificationToken: input.verificationToken,
+      verificationTokenHash: input.verificationTokenHash,
+      verificationStatus: 'pending',
+      certificateStatus: 'pending',
+      lifecycleStatus: 'pending_dns',
+      primaryDomain: listCustomDomainsBySubdomain(input.subdomain).length === 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    domains.putSync(input.hostname, domain);
+    return { domain, created: true };
+  });
+}
+
+export function getCustomDomain(hostname: string): CustomDomain | undefined {
+  return getCustomDomainDatabase().get(hostname);
+}
+
+export function getActiveCustomDomain(hostname: string): CustomDomain | undefined {
+  const domain = getCustomDomain(hostname);
+  return domain?.lifecycleStatus === 'active' && domain.certificateStatus === 'active' && domain.verificationStatus === 'verified'
+    ? domain
+    : undefined;
+}
+
+export function listCustomDomainsBySubdomain(subdomain: string): CustomDomain[] {
+  const domains: CustomDomain[] = [];
+  for (const hostname of getCustomDomainDatabase().getKeys()) {
+    const domain = getCustomDomainDatabase().get(hostname);
+    if (domain?.subdomain === subdomain) domains.push(domain);
+  }
+  return domains.sort((a, b) => a.hostname.localeCompare(b.hostname));
+}
+
+export function updateCustomDomain(hostname: string, patch: Partial<Omit<CustomDomain, 'hostname' | 'createdAt'>>): CustomDomain | undefined {
+  const domains = getCustomDomainDatabase();
+  const existing = domains.get(hostname);
+  if (!existing) return undefined;
+  const updated: CustomDomain = { ...existing, ...patch, hostname, createdAt: existing.createdAt, updatedAt: nowIso() };
+  domains.putSync(hostname, updated);
+  return updated;
+}
+
+export function deleteCustomDomain(hostname: string): boolean {
+  const domains = getCustomDomainDatabase();
+  if (!domains.get(hostname)) return false;
+  domains.removeSync(hostname);
   return true;
 }
 
@@ -1266,6 +1362,10 @@ export async function closeDatabase(): Promise<void> {
   if (subdomainDb) {
     await subdomainDb.close();
     subdomainDb = undefined as unknown as Database<Subdomain, string>;
+  }
+  if (customDomainDb) {
+    await customDomainDb.close();
+    customDomainDb = undefined as unknown as Database<CustomDomain, string>;
   }
   if (agentKeyDb) {
     await agentKeyDb.close();

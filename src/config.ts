@@ -100,6 +100,16 @@ export const config = {
     };
   },
 
+  // Custom domains. The default provider intentionally cannot activate hosts;
+  // configure a managed edge adapter before enabling production routing.
+  get customDomains() {
+    return {
+      enabled: process.env.CUSTOM_DOMAINS_ENABLED !== 'false',
+      provider: process.env.CUSTOM_DOMAINS_PROVIDER || 'unconfigured',
+      routingTarget: process.env.CUSTOM_DOMAINS_ROUTING_TARGET || 'domains.zenbin.org',
+    };
+  },
+
   // Stripe Billing
   get stripe() {
     return {

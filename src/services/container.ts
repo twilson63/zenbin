@@ -11,6 +11,7 @@ import { KeyService } from './keyService.js';
 import { NonceService } from './nonceService.js';
 import { AuditService } from './auditService.js';
 import { VideoService } from './videoService.js';
+import { CustomDomainService } from './customDomainService.js';
 import { billingService } from './billingService.js';
 import type {
   IPageService,
@@ -19,6 +20,7 @@ import type {
   INonceService,
   IAuditService,
   IVideoService,
+  ICustomDomainService,
   IBillingService,
 } from './interfaces.js';
 
@@ -29,6 +31,7 @@ export interface Services {
   nonces: INonceService;
   audit: IAuditService;
   videos: IVideoService;
+  domains: ICustomDomainService;
   billing: IBillingService;
 }
 
@@ -40,6 +43,7 @@ export function createServices(): Services {
     nonces: new NonceService(),
     audit: new AuditService(),
     videos: new VideoService(),
+    domains: new CustomDomainService(),
     billing: billingService,
   };
 }

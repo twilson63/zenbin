@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { hasScope, requireSignedAgent } from '../middleware/signedAgent.js';
 import { ErrorCodes, errorResponse } from '../errors.js';
 import type { Services } from '../services/container.js';
+import { normalizeCustomHostname } from '../services/customDomainService.js';
 
 const subdomains = new Hono();
 
@@ -170,6 +171,133 @@ subdomains.get('/:name/pages', (c) => {
   });
 });
 
+
+interface CustomDomainBody {
+  hostname?: unknown;
+  primary?: unknown;
+}
+
+function customDomainResponse(domain: import('../types.js').CustomDomain) {
+  return {
+    hostname: domain.hostname,
+    subdomain: domain.subdomain,
+    status: domain.lifecycleStatus,
+    verification_status: domain.verificationStatus,
+    certificate_status: domain.certificateStatus,
+    primary: domain.primaryDomain,
+    dns: domain.verificationToken ? {
+      ownership: {
+        type: 'TXT',
+        name: `_zenbin-verification.${domain.hostname}`,
+        value: `zenbin-verification=${domain.verificationToken}`,
+      },
+      routing: {
+        type: 'CNAME_OR_ALIAS',
+        name: domain.hostname,
+        value: config.customDomains.routingTarget,
+      },
+    } : undefined,
+    error_code: domain.lastErrorCode,
+    error_detail: domain.lastErrorDetail,
+    created_at: domain.createdAt,
+    updated_at: domain.updatedAt,
+    verified_at: domain.verifiedAt,
+    activated_at: domain.activatedAt,
+  };
+}
+
+function requireDomainOwner(c: Context, name: string): { keyId: string; subdomain: import('../types.js').Subdomain } | Response {
+  const subdomain = getServices(c).subdomains.get(name);
+  const keyId = getSignedKey(c);
+  if (!subdomain) return errorResponse(ErrorCodes.SUBDOMAIN_NOT_FOUND, `Subdomain '${name}' not found`, 404);
+  if (!keyId || subdomain.ownerKeyId !== keyId) {
+    return errorResponse(ErrorCodes.CUSTOM_DOMAIN_OWNERSHIP_REQUIRED, 'This signing key does not own the destination subdomain', 403);
+  }
+  return { keyId, subdomain };
+}
+
+subdomains.post('/:name/domains', async (c) => {
+  const name = c.req.param('name').toLowerCase();
+  const ownership = requireDomainOwner(c, name);
+  if (ownership instanceof Response) return ownership;
+
+  let body: CustomDomainBody;
+  try {
+    body = await c.req.json<CustomDomainBody>();
+  } catch {
+    return errorResponse(ErrorCodes.INVALID_JSON, 'Invalid JSON body', 400);
+  }
+  if (typeof body.hostname !== 'string') {
+    return errorResponse(ErrorCodes.CUSTOM_DOMAIN_INVALID, 'hostname must be a string', 400);
+  }
+
+  const result = getServices(c).domains.create(body.hostname, name, ownership.keyId);
+  if (result.invalid) return errorResponse(ErrorCodes.CUSTOM_DOMAIN_INVALID, 'Invalid custom hostname', 400);
+  if (result.conflict) return errorResponse(ErrorCodes.CUSTOM_DOMAIN_TAKEN, 'Custom hostname is already claimed', 409);
+
+  await getServices(c).audit.save({
+    action: 'custom_domain_attach', targetType: 'custom_domain', keyId: ownership.keyId, subdomain: name, status: 'accepted',
+    metadata: { hostname: result.domain!.hostname },
+  });
+  return c.json(customDomainResponse(result.domain!), 201);
+});
+
+subdomains.get('/:name/domains', (c) => {
+  const name = c.req.param('name').toLowerCase();
+  const ownership = requireDomainOwner(c, name);
+  if (ownership instanceof Response) return ownership;
+  return c.json({ subdomain: name, domains: getServices(c).domains.list(name).map(customDomainResponse) });
+});
+
+subdomains.post('/:name/domains/:hostname/verify', async (c) => {
+  const name = c.req.param('name').toLowerCase();
+  const ownership = requireDomainOwner(c, name);
+  if (ownership instanceof Response) return ownership;
+  const hostname = normalizeCustomHostname(c.req.param('hostname'));
+  const domain = hostname ? getServices(c).domains.get(hostname) : undefined;
+  if (!domain || domain.subdomain !== name) return errorResponse(ErrorCodes.CUSTOM_DOMAIN_NOT_FOUND, 'Custom domain not found', 404);
+
+  const result = await getServices(c).domains.verify(hostname!);
+  await getServices(c).audit.save({
+    action: result.errorCode ? 'custom_domain_verify_failed' : 'custom_domain_verify', targetType: 'custom_domain', keyId: ownership.keyId, subdomain: name,
+    status: result.errorCode ? 'rejected' : 'accepted', reason: result.errorCode, metadata: { hostname: hostname! },
+  });
+  if (result.errorCode === 'CUSTOM_DOMAIN_DNS_MISMATCH') return errorResponse(ErrorCodes.CUSTOM_DOMAIN_DNS_MISMATCH, result.domain.lastErrorDetail || 'DNS ownership verification failed', 409, { domain: customDomainResponse(result.domain) });
+  if (result.errorCode === 'CUSTOM_DOMAIN_PROVIDER_ERROR') return errorResponse(ErrorCodes.CUSTOM_DOMAIN_PROVIDER_ERROR, result.domain.lastErrorDetail || 'Managed hostname provider failed', 502, { domain: customDomainResponse(result.domain) });
+  return c.json(customDomainResponse(result.domain), result.errorCode ? 202 : 200);
+});
+
+subdomains.patch('/:name/domains/:hostname', async (c) => {
+  const name = c.req.param('name').toLowerCase();
+  const ownership = requireDomainOwner(c, name);
+  if (ownership instanceof Response) return ownership;
+  const hostname = normalizeCustomHostname(c.req.param('hostname'));
+  const domain = hostname ? getServices(c).domains.get(hostname) : undefined;
+  if (!domain || domain.subdomain !== name) return errorResponse(ErrorCodes.CUSTOM_DOMAIN_NOT_FOUND, 'Custom domain not found', 404);
+  let body: CustomDomainBody;
+  try { body = await c.req.json<CustomDomainBody>(); } catch { return errorResponse(ErrorCodes.INVALID_JSON, 'Invalid JSON body', 400); }
+  if (typeof body.primary !== 'boolean') return errorResponse(ErrorCodes.INVALID_REQUEST, 'primary must be a boolean', 400);
+  const updated = getServices(c).domains.setPrimary(hostname!, body.primary)!;
+  await getServices(c).audit.save({ action: 'custom_domain_primary_change', targetType: 'custom_domain', keyId: ownership.keyId, subdomain: name, status: 'accepted', metadata: { hostname, primary: body.primary } });
+  return c.json(customDomainResponse(updated));
+});
+
+subdomains.delete('/:name/domains/:hostname', async (c) => {
+  const name = c.req.param('name').toLowerCase();
+  const ownership = requireDomainOwner(c, name);
+  if (ownership instanceof Response) return ownership;
+  const hostname = normalizeCustomHostname(c.req.param('hostname'));
+  const domain = hostname ? getServices(c).domains.get(hostname) : undefined;
+  if (!domain || domain.subdomain !== name) return errorResponse(ErrorCodes.CUSTOM_DOMAIN_NOT_FOUND, 'Custom domain not found', 404);
+  const result = await getServices(c).domains.delete(hostname!);
+  await getServices(c).audit.save({
+    action: result.errorCode ? 'custom_domain_delete_failed' : 'custom_domain_delete', targetType: 'custom_domain', keyId: ownership.keyId, subdomain: name,
+    status: result.errorCode ? 'rejected' : 'accepted', reason: result.errorCode, metadata: { hostname: hostname! },
+  });
+  if (result.errorCode) return errorResponse(ErrorCodes.CUSTOM_DOMAIN_PROVIDER_ERROR, result.domain?.lastErrorDetail || 'Managed hostname cleanup failed', 502);
+  return c.json({ hostname: hostname!, deleted: true, deleted_at: new Date().toISOString() });
+});
+
 subdomains.delete('/:name', async (c) => {
   const name = c.req.param('name').toLowerCase();
   const keyId = getSignedKey(c);
@@ -187,6 +315,11 @@ subdomains.delete('/:name', async (c) => {
   }
   if (!allowed) {
     return errorResponse(ErrorCodes.SUBDOMAIN_OWNERSHIP_REQUIRED, 'This signing key does not own the subdomain', 403);
+  }
+
+  const domainCleanup = await services.domains.deleteAllForSubdomain(name);
+  if (domainCleanup.errorCode) {
+    return errorResponse(ErrorCodes.CUSTOM_DOMAIN_PROVIDER_ERROR, 'Custom-domain routing was deactivated but provider cleanup must be retried before deleting this subdomain', 503);
   }
 
   const deleted = await services.subdomains.delete(name);

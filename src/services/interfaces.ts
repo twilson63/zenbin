@@ -16,6 +16,7 @@ import type {
   SubdomainResult,
   Plan,
   LimitCheckResult,
+  CustomDomain,
 } from '../types.js';
 import type { PageSummary } from '../storage/db.js';
 
@@ -94,6 +95,19 @@ export interface ISubdomainService {
 
   // Validation
   validateName(name: string): { valid: boolean; error?: string };
+}
+
+// ─── Custom Domain Service ──────────────────────────────────
+
+export interface ICustomDomainService {
+  create(hostname: string, subdomain: string, ownerKeyId: string): { domain?: CustomDomain; conflict: boolean; invalid: boolean };
+  get(hostname: string): CustomDomain | undefined;
+  list(subdomain: string): CustomDomain[];
+  getActiveForHost(host: string): CustomDomain | undefined;
+  verify(hostname: string): Promise<{ domain: CustomDomain; errorCode?: string }>;
+  setPrimary(hostname: string, primary: boolean): CustomDomain | undefined;
+  delete(hostname: string): Promise<{ domain?: CustomDomain; errorCode?: string }>;
+  deleteAllForSubdomain(subdomain: string): Promise<{ errorCode?: string }>;
 }
 
 // ─── Key Service ────────────────────────────────────────────
