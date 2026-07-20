@@ -275,12 +275,6 @@ export function getCustomDomainDatabase(): Database<CustomDomain, string> {
 }
 
 export function getAgentKeyDatabase(): Database<AgentKey, string> {
-  if (!customDomainDb) {
-    customDomainDb = open<CustomDomain, string>({
-      path: `${config.lmdbPath}-custom-domains`,
-      compression: true,
-    });
-  }
   if (!agentKeyDb) {
     throw new Error('Database not initialized. Call initDatabase() first.');
   }
