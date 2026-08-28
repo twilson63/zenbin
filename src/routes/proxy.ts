@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { Agent, buildConnector } from 'undici';
+import { Agent, buildConnector, fetch as undiciFetch } from 'undici';
 import { config } from '../config.js';
 import { validateProxyRequest, ProxyRequest } from '../utils/validation.js';
 import { resolveAndValidate } from '../utils/ssrf.js';
@@ -141,14 +141,14 @@ proxy.post('/', async (c) => {
 
   let currentUrl = proxyReq.url;
   let redirectCount = 0;
-  let response: Response | null = null;
+  let response: Awaited<ReturnType<typeof undiciFetch>> | null = null;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
     while (redirectCount <= maxRedirects) {
-      const fetchOptions: RequestInit & { dispatcher?: Agent } = {
+      const fetchOptions: Parameters<typeof undiciFetch>[1] = {
         method: redirectCount === 0 ? method : 'GET', // Follow redirects with GET
         headers: outgoingHeaders,
         signal: controller.signal,
@@ -159,10 +159,13 @@ proxy.post('/', async (c) => {
 
       // Only include body on first request and if method supports it
       if (redirectCount === 0 && proxyReq.body !== undefined && !['GET', 'HEAD'].includes(method)) {
-        fetchOptions.body = JSON.stringify(proxyReq.body);
+        fetchOptions!.body = JSON.stringify(proxyReq.body);
       }
 
-      response = await fetch(currentUrl, fetchOptions);
+      // Use undici's own fetch so the dispatcher (also undici) is the SAME
+      // version. Passing an npm-undici Agent to Node's built-in global fetch
+      // fails with UND_ERR_INVALID_ARG when the two undici versions differ.
+      response = await undiciFetch(currentUrl, fetchOptions);
 
       // Check for redirect
       if ([301, 302, 303, 307, 308].includes(response.status)) {
