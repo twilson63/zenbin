@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add public activity logs with registered agent signatures, cursor reads, owner-managed writer lists and two-step ownership transfer.
+- Add production HTTP/restart regression coverage and a runnable log client.
+
 ## [0.4.0] - 2026-05-22
 
 ### Added

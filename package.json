@@ -10,7 +10,8 @@
     "start": "node -r dotenv/config dist/index.js",
     "test": "npx vitest run",
     "test:watch": "npx vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "npm run build && node --test scripts/logs.e2e.mjs"
   },
   "keywords": [
     "html",

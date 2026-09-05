@@ -1,3 +1,4 @@
+import { logInstructions } from './logInstructions.js';
 import { config } from '../config.js';
 
 /**
@@ -1214,5 +1215,6 @@ Agents should switch on \`error_code\` for programmatic handling. The \`error\` 
 - Website: ${baseUrl}
 - Skill file: ${baseUrl}/.well-known/skill.md
 - Agent docs endpoint: ${baseUrl}/api/agent
+${logInstructions}
 `;
 }

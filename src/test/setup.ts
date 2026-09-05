@@ -1,10 +1,11 @@
 import { beforeAll, afterAll } from 'vitest';
+import { closeLogDatabase } from '../storage/logs.js';
 import { initDatabase, closeDatabase } from '../storage/db.js';
 import { rmSync } from 'fs';
 
 const TEST_DB_PATH = './data/test.lmdb';
 const TEST_VIDEO_PATH = './data/test-videos';
-const TEST_DB_SUFFIXES = ['', '-subdomains', '-custom-domains', '-agent-keys', '-nonces', '-audit', '-owner-index', '-recipient-index'];
+const TEST_DB_SUFFIXES = ['', '-subdomains', '-custom-domains', '-agent-keys', '-nonces', '-audit', '-owner-index', '-recipient-index', '-logs', '-logs-lock'];
 
 beforeAll(() => {
   process.env.NODE_ENV = 'test';
@@ -33,6 +34,7 @@ beforeAll(() => {
 });
 
 afterAll(async () => {
+  await closeLogDatabase();
   await closeDatabase();
   
   // Clean up test database

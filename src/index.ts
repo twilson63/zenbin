@@ -5,6 +5,9 @@ import { logger } from 'hono/logger';
 import { bodyLimit } from 'hono/body-limit';
 import dotenv from 'dotenv';
 import { config } from './config.js';
+import { initLogDatabase, closeLogDatabase } from './storage/logs.js';
+import { logs } from './routes/logs.js';
+import { logLimits } from './utils/logSignature.js';
 import { initDatabase, closeDatabase, backfillOwnerIndex, backfillRecipientIndex, backfillKeyFingerprints, backfillAttestationIndexes, cleanupExpiredNonces, listPublicPageIds } from './storage/db.js';
 import { initVideoStorage } from './storage/video.js';
 import { createServices, type Services } from './services/container.js';
@@ -44,10 +47,10 @@ app.use('*', logger());
 app.use('*', cors());
 // Hard transport-level body cap: reject oversized payloads before any handler
 // buffers the full body (e.g. signed-agent digest verification reads it whole).
-app.use('*', bodyLimit({
-  maxSize: config.maxRequestBodyBytes,
+app.use('*', (c, next) => bodyLimit({
+  maxSize: c.req.path.startsWith('/v1/logs/') ? Math.min(config.maxRequestBodyBytes, logLimits.bodyBytes) : config.maxRequestBodyBytes,
   onError: (c) => c.json({ error: 'Request body too large' }, 413),
-}));
+})(c, next));
 app.use('*', rateLimit);
 
 // Inject services into request context
@@ -179,6 +182,7 @@ ${urls.join('\n')}
 app.route('/v1/pages', pages);
 app.route('/v1/subdomains', subdomains);
 app.route('/v1/stats', stats);
+app.route('/v1/logs', logs);
 app.route('/v1/keys', keys);
 app.route('/v1/verify', verify);
 app.route('/v1/admin/keys', adminKeys);
@@ -261,6 +265,7 @@ async function main() {
   try {
     console.log('Initializing database...');
     initDatabase();
+    initLogDatabase();
     console.log(`Database initialized at ${config.lmdbPath}`);
 
     // Backfill owner index for pages created before the listing feature
@@ -386,6 +391,7 @@ API Key Configuration:
     const shutdown = async (signal: string) => {
       console.log(`\nReceived ${signal}. Shutting down gracefully...`);
       await closeAnalytics();
+      await closeLogDatabase();
       await closeDatabase();
       process.exit(0);
     };
