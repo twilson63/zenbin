@@ -32,6 +32,8 @@ declare module 'hono' {
 }
 
 export async function verifyApiKey(c: Context, next: Next) {
+  // Public polling does not consume monthly publication quota.
+  if ((c.req.method === 'GET' || c.req.method === 'HEAD') && /^\/v1\/logs\/[^/]+(?:\/entries)?$/.test(c.req.path)) return next();
   const authHeader = c.req.header('Authorization');
   const apiKey = c.req.header('X-API-Key');
 
