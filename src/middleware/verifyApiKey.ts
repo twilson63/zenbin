@@ -5,6 +5,8 @@ import { Context, Next } from 'hono';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
+import { getAgentKey } from '../storage/db.js';
+import { buildCanonicalRequest, verifyBodyDigest, verifyEd25519Signature } from '../utils/httpSignature.js';
 
 // JWT secret must be configured via ZENBIN_JWT_SECRET environment variable.
 // If not set, JWT-based API key verification is disabled and requests fall through
@@ -31,9 +33,68 @@ declare module 'hono' {
   }
 }
 
+/**
+ * True when the request carries a valid Ed25519 signature from a key on a
+ * paid plan (pro/enterprise). Such requests skip the anonymous free-tier
+ * bucket: the key holder is already identified, per-key quotas (pages,
+ * subdomains) are still enforced downstream, and the route-level signature
+ * check (nonce replay protection, key status) still runs.
+ *
+ * This check is read-only — it never registers nonces, touches keys, or
+ * writes audit logs — so the downstream verification is unaffected. Anything
+ * unsigned, signed by an unknown/free-plan key, or failing verification falls
+ * through to the anonymous bucket as before.
+ */
+async function hasPaidPlanSignature(c: Context): Promise<boolean> {
+  // CAP headers take priority, X-Zenbin headers are legacy fallback
+  const keyId = c.req.header('CAP-Key-Id') || c.req.header('X-Zenbin-Key-Id');
+  const timestamp = c.req.header('CAP-Timestamp') || c.req.header('X-Zenbin-Timestamp');
+  const nonce = c.req.header('CAP-Nonce') || c.req.header('X-Zenbin-Nonce');
+  const contentDigest = c.req.header('CAP-Digest') || c.req.header('Content-Digest');
+  const signature = c.req.header('CAP-Signature') || c.req.header('X-Zenbin-Signature');
+  if (!keyId || !timestamp || !nonce || !contentDigest || !signature) return false;
+
+  const agentKey = getAgentKey(keyId);
+  if (!agentKey) return false;
+  if (agentKey.plan !== 'pro' && agentKey.plan !== 'enterprise') return false;
+
+  const requestTime = Date.parse(timestamp);
+  if (Number.isNaN(requestTime)) return false;
+  if (Math.abs(Date.now() - requestTime) > config.signedPublishing.maxTimestampSkewMs) return false;
+
+  let rawBody: string;
+  try {
+    rawBody = await c.req.text();
+  } catch {
+    return false;
+  }
+  if (!verifyBodyDigest(rawBody, contentDigest)) return false;
+
+  const url = new URL(c.req.url);
+  const canonical = buildCanonicalRequest({
+    method: c.req.method,
+    path: `${url.pathname}${url.search}`,
+    timestamp,
+    nonce,
+    contentDigest,
+  });
+
+  try {
+    return verifyEd25519Signature({ publicJwk: agentKey.publicJwk, canonical, signature });
+  } catch {
+    return false;
+  }
+}
+
 export async function verifyApiKey(c: Context, next: Next) {
   // Public polling does not consume monthly publication quota.
   if ((c.req.method === 'GET' || c.req.method === 'HEAD') && /^\/v1\/logs\/[^/]+(?:\/entries)?$/.test(c.req.path)) return next();
+  // Paid-plan signed requests are identified by key and quota'd per key —
+  // they never draw from the anonymous free-tier bucket.
+  if (await hasPaidPlanSignature(c)) {
+    await next();
+    return;
+  }
   const authHeader = c.req.header('Authorization');
   const apiKey = c.req.header('X-API-Key');
 
