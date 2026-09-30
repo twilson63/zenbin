@@ -6,6 +6,7 @@ import { logs } from '../routes/logs.js';
 import { verifyApiKey } from '../middleware/verifyApiKey.js';
 import { closeLogDatabase, initLogDatabase } from '../storage/logs.js';
 import { config } from '../config.js';
+import { updateAgentKeyPlan } from '../storage/db.js';
 import { createAgent, registerLogAgents } from './logHelpers.js';
 
 const app = new Hono();
@@ -130,6 +131,28 @@ describe('Public logs API', () => {
     const preflight = await app.request(`${path}/entries`, { method: 'OPTIONS', headers: { ...headers, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'x-zenbin-public-key,x-zenbin-signature,content-digest' } });
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get('Access-Control-Allow-Headers')).toContain('x-zenbin-signature');
+  });
+
+  it('accepts signed writes from paid-plan keys after the free-tier bypass has read the body', async () => {
+    // Regression: hasPaidPlanSignature consumes the raw body stream; the logs
+    // route must read through Hono's cache instead of locking the stream.
+    const paid = createAgent();
+    await registerLogAgents();
+    await updateAgentKeyPlan(paid.keyId, 'enterprise');
+    const path = `/v1/logs/${id()}`;
+    const headers = { 'User-Agent': randomUUID() };
+    for (let i = 0; i < config.freeTier.monthlyLimit; i++) expect((await app.request('/v1/quota-check', { headers })).status).toBe(200);
+    expect((await app.request('/v1/quota-check', { headers })).status).toBe(429);
+    const created = await app.request(path, paid.request(path, {}));
+    expect(created.status).toBe(201);
+    const metadata = '{"event":"雪"}';
+    const write = paid.request(`${path}/entries`, { metadata });
+    write.headers.set('User-Agent', headers['User-Agent']);
+    const appended = await app.request(`${path}/entries`, write);
+    expect(appended.status).toBe(201);
+    expect(await appended.json()).toMatchObject({ sequence: 1, agent_fingerprint: paid.fingerprint, metadata });
+    const oversized = paid.request(`${path}/entries`, { metadata: '"' + 'x'.repeat(70_000) + '"' });
+    expect((await app.request(`${path}/entries`, oversized)).status).toBe(413);
   });
 });
 
