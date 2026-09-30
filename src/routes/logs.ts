@@ -14,27 +14,12 @@ logs.use('*', async (c, next) => {
     return c.json({ error: 'Content-Type must be application/json' }, 400);
   }
 
-  // Count actual bytes, even if Content-Length is absent or inaccurate.
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  const reader = c.req.raw.body?.getReader();
-  if (reader) {
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        size += value.byteLength;
-        if (size > logLimits.bodyBytes) {
-          await reader.cancel();
-          return c.json({ error: 'Log request body exceeds 64 KiB' }, 413);
-        }
-        chunks.push(value);
-      }
-    } finally {
-      reader.releaseLock();
-    }
-  }
-  const rawBody = Buffer.concat(chunks, size);
+  // Read through Hono's cached body: upstream middleware (paid-plan signature
+  // bypass) may already have consumed the raw stream, and Hono replays the
+  // cached bytes rather than locking the stream. Bytes are checked on the
+  // buffered body, so an absent or inaccurate Content-Length still cannot bypass the cap.
+  const rawBody = Buffer.from(await c.req.arrayBuffer());
+  if (rawBody.byteLength > logLimits.bodyBytes) return c.json({ error: 'Log request body exceeds 64 KiB' }, 413);
   const signer = verifyLogSignature(c.req.method, new URL(c.req.url).pathname, c.req.raw.headers, rawBody);
   if ('error' in signer) return c.json({ error: signer.error }, signer.status);
   let body: unknown;
